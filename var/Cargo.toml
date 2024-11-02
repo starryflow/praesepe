@@ -1,0 +1,30 @@
+[package]
+name = "var"
+description = "Variable, generic variable definitions."
+version.workspace = true
+homepage.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+edition.workspace = true
+readme.workspace = true
+
+[dependencies]
+# 
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# numeric
+numtoa = { workspace = true }
+ryu = { workspace = true }
+
+# map 
+indexmap = { workspace = true }
+
+# string
+faststr = { workspace = true }
+
+# serde
+serde = { workspace = true }
+serde_json = { workspace = true }
