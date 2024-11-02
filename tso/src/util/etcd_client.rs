@@ -41,10 +41,6 @@ impl EtcdClient {
         // just now , always return true
         true
     }
-
-    pub fn close(&self) {
-        // do nothing
-    }
 }
 
 //
@@ -99,12 +95,6 @@ impl EtcdClient {
 
 // lease api
 impl EtcdClient {
-    pub fn grant(&self, ttl_sec: i64) -> TsoResult<LeaseGrantResponse> {
-        self.runtime
-            .block_on(async { self.client.lock().lease_grant(ttl_sec, None).await })
-            .map_err(|e| anyhow::anyhow!(e))
-    }
-
     pub fn try_grant(&self, ttl_sec: i64, timeout: u64) -> TsoResult<LeaseGrantResponse> {
         self.runtime.block_on(async {
             let mut lock = self.client.lock();
@@ -130,19 +120,6 @@ impl EtcdClient {
                         anyhow::bail!(TsoError::TaskCancel);
                     }
                 };
-            }
-        })
-    }
-
-    pub fn keep_alive_once(&self, lease_id: i64) -> TsoResult<LeaseKeepAliveResponse> {
-        self.runtime.block_on(async {
-            match self.client.lock().lease_keep_alive(lease_id).await {
-                Ok((_, mut s)) => match s.message().await {
-                    Ok(Some(r)) => Ok(r),
-                    Ok(None) => anyhow::bail!("keep alive failed, no response"),
-                    Err(e) => anyhow::bail!(e),
-                },
-                Err(e) => anyhow::bail!(e),
             }
         })
     }
@@ -184,16 +161,6 @@ impl EtcdClient {
                     }
                 };
             }
-        })
-    }
-
-    pub fn revoke(&self, lease_id: i64) -> TsoResult<LeaseRevokeResponse> {
-        self.runtime.block_on(async {
-            self.client
-                .lock()
-                .lease_revoke(lease_id)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))
         })
     }
 

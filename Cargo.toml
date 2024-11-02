@@ -16,6 +16,7 @@ members = ["tso", "var"]
 [workspace.dependencies]
 # 
 anyhow = "1.0.90"
+scopeguard = "1.2.0"
 thiserror = "1.0.64"
 
 # algo

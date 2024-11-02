@@ -2186,6 +2186,7 @@ dependencies = [
  "parking_lot",
  "prometheus",
  "rayon",
+ "scopeguard",
  "serde",
  "serde_json",
  "sha2",

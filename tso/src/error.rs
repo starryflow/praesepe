@@ -7,6 +7,8 @@ pub enum TsoError {
     EtcdTxnConflict,
     #[error("ErrEtcdTxnInternal, cause: {0}")]
     EtcdTxnInternal(Error),
+    #[error("EtcdGrantLease, cause: {0}")]
+    EtcdGrantLease(Error),
     #[error("ErrCheckCampaign")]
     CheckCampaign,
     #[error("ErrBytesToU64")]

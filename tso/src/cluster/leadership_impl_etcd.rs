@@ -1,12 +1,21 @@
-use std::{fmt::Debug, sync::atomic::AtomicBool, time::Duration};
+use std::{
+    fmt::Debug,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc,
+    },
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use coarsetime::Instant;
 use etcd_client::{Compare, CompareOp, EventType, PutOptions, Txn, TxnOp, WatchOptions};
 
 use parking_lot::Mutex;
-use rayon::{ThreadPool, ThreadPoolBuilder};
-use tokio::sync::OnceCell;
+use tokio::{
+    runtime::{Builder, Runtime},
+    sync::OnceCell,
+};
 
 use crate::{
     bootstrap::ExitSignal,
@@ -22,7 +31,7 @@ pub struct EtcdLeadership {
 
     /// The lease which is used to get this leadership
     lease: OnceCell<Lease>,
-    etcd_client: EtcdClient,
+    etcd_client: Arc<EtcdClient>,
     /// leader_key and leader_value are key-value pair in etcd
     leader_key: String,
     leader_value: Mutex<String>,
@@ -30,7 +39,7 @@ pub struct EtcdLeadership {
     /// which is used to reuse `Watch` interface in `Leadership`.
     primary_watch: AtomicBool,
 
-    thread_pool: ThreadPool,
+    rt: Runtime,
 }
 
 #[async_trait]
@@ -52,7 +61,7 @@ impl TsoLeadership for EtcdLeadership {
             .and_then(vec![TxnOp::put(
                 self.leader_key.to_owned(),
                 leader_data.to_owned(),
-                Some(PutOptions::new().with_lease(new_lease.lease_id)),
+                Some(PutOptions::new().with_lease(new_lease.get_lease_id())),
             )]);
         let resp = self.etcd_client.do_in_txn(txn);
         log::info!("check campaign resp: {:?}", resp);
@@ -109,7 +118,7 @@ impl TsoLeadership for EtcdLeadership {
 
     fn keep(&self, exit_signal: ExitSignal) {
         if let Some(lease) = self.lease.get() {
-            lease.keep_alive(&self.etcd_client, &self.thread_pool, exit_signal);
+            lease.keep_alive(&self.rt, self.etcd_client.clone(), exit_signal);
         }
     }
 
@@ -267,19 +276,25 @@ impl EtcdLeadership {
         worker_size: usize,
         etcd_client: EtcdClient,
     ) -> Self {
-        let thread_pool = ThreadPoolBuilder::new()
-            .num_threads(worker_size)
-            .thread_name(|worker_idx| format!("TsoLeadershipWorker@{}", worker_idx))
+        let rt = Builder::new_multi_thread()
+            .worker_threads(worker_size)
+            .enable_all()
+            .thread_name_fn(|| {
+                static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
+                let id = ATOMIC_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                format!("TsoLeadershipWorker@{}", id)
+            })
             .build()
             .expect("Create TSO LeadershipWorkerPool failed");
+
         Self {
             purpose: purpose.into(),
             lease: OnceCell::new(),
-            etcd_client,
+            etcd_client: Arc::from(etcd_client),
             leader_key: leader_key.to_owned(),
             leader_value: Mutex::new("".to_owned()),
             primary_watch: false.into(),
-            thread_pool,
+            rt,
         }
     }
 }

@@ -13,6 +13,7 @@ readme.workspace = true
 [dependencies]
 # 
 anyhow = { workspace = true }
+scopeguard = { workspace = true }
 thiserror = { workspace = true }
 
 # algo
