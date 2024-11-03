@@ -9,7 +9,7 @@ use std::{
 
 use async_trait::async_trait;
 use coarsetime::Clock;
-use etcd_client::{Compare, CompareOp, EventType, PutOptions, Txn, TxnOp, WatchOptions, Watcher};
+use etcd_client::{EventType, WatchOptions, Watcher};
 
 use parking_lot::Mutex;
 use tokio::{
@@ -19,7 +19,6 @@ use tokio::{
 
 use crate::{
     bootstrap::ExitSignal,
-    error::TsoError,
     util::{constant::Constant, etcd_client::EtcdClient},
     TsoResult,
 };
@@ -52,31 +51,9 @@ impl TsoLeadership for EtcdLeadership {
         new_lease.grant(lease_timeout_sec, &self.etcd_client)?;
 
         // The leader key must not exist, so the CreateRevision is 0
-        let txn = Txn::new()
-            .when(vec![Compare::create_revision(
-                self.leader_key.to_owned(),
-                CompareOp::Equal,
-                0,
-            )])
-            .and_then(vec![TxnOp::put(
-                self.leader_key.to_owned(),
-                leader_data.to_owned(),
-                Some(PutOptions::new().with_lease(new_lease.get_lease_id())),
-            )]);
-        let resp = self.etcd_client.do_in_txn(txn);
-        log::info!("check campaign resp: {:?}", resp);
-        match resp {
-            Ok(resp) => {
-                if !resp.succeeded() {
-                    new_lease.close(&self.etcd_client);
-                    anyhow::bail!(TsoError::EtcdTxnConflict)
-                }
-            }
-            Err(e) => {
-                new_lease.close(&self.etcd_client);
-                anyhow::bail!(TsoError::EtcdTxnInternal(e))
-            }
-        }
+        self.etcd_client
+            .compare_and_set_str(&self.leader_key, leader_data, 0, new_lease.get_lease_id())
+            .inspect(|_| new_lease.close(&self.etcd_client))?;
 
         log::info!(
             "write leaderData to leaderPath ok, leader-key: {}, purpose: {}",
@@ -199,7 +176,7 @@ impl TsoLeadership for EtcdLeadership {
                         }
 
                         // We need to request progress to etcd to prevent etcd hold the watchChan
-                        if let Err(e) = self.etcd_client.try_request_progress(watcher.as_mut().unwrap(), Constant::DEFAULT_REQUEST_TIMEOUT_MILLIS) {
+                        if let Err(e) = self.etcd_client.try_request_progress(watcher.as_mut().expect("watcher already create"), Constant::DEFAULT_REQUEST_TIMEOUT_MILLIS) {
                             log::warn!("failed to request progress in leader watch loop, cause: {}, revision: {}, leader-key: {}, purpose: {}", e, revision, self.leader_key, self.purpose);
                         }
 
@@ -271,22 +248,18 @@ impl TsoLeadership for EtcdLeadership {
     }
 
     fn get_leader(&self) -> TsoResult<(Option<ParticipantInfo>, i64)> {
-        if let Some((value, mod_rev)) = self.etcd_client.get_with_mod_rev(&self.leader_key)? {
-            if let Ok(info) = serde_json::from_slice::<ParticipantInfo>(&value) {
-                return Ok((Some(info), mod_rev));
-            }
+        if let Some((info, mod_rev)) = self
+            .etcd_client
+            .get_part_info_with_mod_rev(&self.leader_key)?
+        {
+            Ok((Some(info), mod_rev))
+        } else {
+            Ok((None, 0))
         }
-        Ok((None, 0))
     }
 
     fn delete_leader_key(&self) -> TsoResult<()> {
-        let resp = self
-            .etcd_client
-            .do_in_txn(Txn::new().and_then(vec![TxnOp::delete(self.leader_key.to_owned(), None)]))
-            .map_err(|e| anyhow::anyhow!(TsoError::EtcdKVDelete(e)))?;
-        if !resp.succeeded() {
-            anyhow::bail!(TsoError::EtcdTxnConflict)
-        }
+        self.etcd_client.delete(&self.leader_key)?;
 
         // Reset the lease as soon as possible
         self.reset();

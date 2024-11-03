@@ -24,11 +24,27 @@ pub fn example() {
         crate::bootstrap::Bootstrap::start_etcd(&config.etcd_server_urls, exit_signal.clone());
 
     let _ = crate::bootstrap::Bootstrap::start_server(config, etcd_client, exit_signal.clone());
+
+    // exit
+    let _ = exit_sender.send(());
 }
 
 mod test {
     #[test]
-    pub fn test001() {}
+    pub fn test001() {
+        let config = crate::config::Config::default();
+
+        let (exit_sender, exit_receiver) = tokio::sync::broadcast::channel(1);
+        let exit_signal = crate::bootstrap::ExitSignal::new(exit_receiver);
+
+        let etcd_client =
+            crate::bootstrap::Bootstrap::start_etcd(&config.etcd_server_urls, exit_signal.clone());
+
+        let _ = crate::bootstrap::Bootstrap::start_server(config, etcd_client, exit_signal.clone());
+
+        // exit
+        let _ = exit_sender.send(());
+    }
 
     #[test]
     pub fn test002() {

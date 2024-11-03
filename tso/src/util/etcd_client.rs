@@ -2,13 +2,18 @@ use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use coarsetime::Instant;
 use etcd_client::{
-    Client, DeleteResponse, GetResponse, LeaseGrantResponse, LeaseKeepAliveResponse,
-    LeaseRevokeResponse, Txn, TxnResponse, WatchOptions, WatchStream, Watcher,
+    Client, Compare, LeaseGrantResponse, LeaseKeepAliveResponse, LeaseRevokeResponse, PutOptions,
+    Txn, TxnOp, TxnOpResponse, TxnResponse, WatchOptions, WatchStream, Watcher,
 };
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 
-use crate::{bootstrap::ExitSignal, error::TsoError, util::constant::Constant, TsoResult};
+use crate::{
+    bootstrap::ExitSignal, cluster::ParticipantInfo, error::TsoError, util::constant::Constant,
+    TsoResult,
+};
+
+use super::utils::Utils;
 
 pub struct EtcdClient {
     endpoints: String,
@@ -45,32 +50,132 @@ impl EtcdClient {
 
 //
 impl EtcdClient {
-    pub fn get(&self, key: &str) -> TsoResult<GetResponse> {
+    pub fn get_u64(&self, key: &str) -> TsoResult<Option<u64>> {
         let start = Instant::now();
         let resp = self
             .rt
-            .block_on(async { self.client.lock().get(key, None).await })
-            .map_err(|e| anyhow::anyhow!(e));
+            .block_on(async { self.client.lock().get(key, None).await });
         let cost = start.elapsed().as_millis();
         if cost > Constant::SLOW_REQUEST_TIME_MILLIS {
             log::warn!("kv gets too slow, request key: {}, cost: {}", key, cost);
         }
 
-        if let Err(e) = &resp {
-            log::error!("load from etcd meet error, key: {}, cause: {}", key, e);
+        match resp {
+            Ok(resp) => {
+                if resp.count() == 0 {
+                    Ok(None)
+                } else {
+                    Ok(Some(Utils::bytes_to_u64(resp.kvs()[0].value())?))
+                }
+            }
+            Err(e) => {
+                log::error!("load from etcd meet error, key: {}, cause: {}", key, e);
+                anyhow::bail!(e)
+            }
         }
-
-        resp
     }
 
-    pub fn get_with_mod_rev(&self, key: &str) -> TsoResult<Option<(Vec<u8>, i64)>> {
+    pub fn compare_and_set_u64(
+        &self,
+        key: &str,
+        value: u64,
+        expected_create_revision: i64,
+    ) -> TsoResult<u64> {
+        let value_bytes = Utils::u64_to_bytes(value);
+
+        let txn = Txn::new()
+            .when(vec![Compare::create_revision(
+                key,
+                etcd_client::CompareOp::Equal,
+                expected_create_revision,
+            )])
+            .and_then(vec![TxnOp::put(key, value_bytes, None)])
+            .or_else(vec![TxnOp::get(key, None)]);
+        let resp = self.do_in_txn(txn)?;
+
+        // Txn commits ok, return the generated cluster ID
+        if resp.succeeded() {
+            Ok(value)
+        }
+        // Otherwise, parse the committed cluster ID
+        else if resp.op_responses().len() == 0 {
+            anyhow::bail!(TsoError::EtcdTxnConflict)
+        } else {
+            let resp = resp.op_responses().remove(0);
+            match resp {
+                TxnOpResponse::Get(r) => {
+                    if r.kvs().len() == 1 {
+                        Utils::bytes_to_u64(r.kvs()[0].value())
+                    } else {
+                        anyhow::bail!(TsoError::EtcdTxnConflict)
+                    }
+                }
+                _ => anyhow::bail!(TsoError::EtcdTxnConflict),
+            }
+        }
+    }
+
+    pub fn compare_and_set_str(
+        &self,
+        key: &str,
+        value: &str,
+        expected_create_revision: i64,
+        lease_id: i64,
+    ) -> TsoResult<()> {
+        let value_string = value.to_owned();
+
+        let txn = Txn::new()
+            .when(vec![Compare::create_revision(
+                key,
+                etcd_client::CompareOp::Equal,
+                expected_create_revision,
+            )])
+            .and_then(vec![TxnOp::put(
+                key,
+                value_string,
+                Some(PutOptions::new().with_lease(lease_id)),
+            )]);
+        let resp = self.do_in_txn(txn);
+        log::info!(
+            "compare_and_set_str, key: {}, value: {}, lease_id: {}, resp: {:?}",
+            key,
+            value,
+            lease_id,
+            resp
+        );
+
+        match resp {
+            Ok(resp) => {
+                if !resp.succeeded() {
+                    anyhow::bail!(TsoError::EtcdTxnConflict)
+                } else {
+                    Ok(())
+                }
+            }
+            Err(e) => {
+                anyhow::bail!(TsoError::EtcdTxnInternal(e))
+            }
+        }
+    }
+
+    pub fn get_part_info_with_mod_rev(
+        &self,
+        key: &str,
+    ) -> TsoResult<Option<(ParticipantInfo, i64)>> {
         self.rt.block_on(async {
             match self.client.lock().get(key, None).await {
                 Ok(mut resp) => {
                     if resp.count() > 0 {
                         let kv = resp.take_kvs().remove(0);
                         let rv = kv.mod_revision();
-                        Ok(Some((kv.into_key_value().1, rv)))
+
+                        if let Ok(info) =
+                            serde_json::from_slice::<ParticipantInfo>(&kv.into_key_value().1)
+                        {
+                            Ok(Some((info, rv)))
+                        } else {
+                            Ok(None)
+                        }
                     } else {
                         Ok(None)
                     }
@@ -80,13 +185,18 @@ impl EtcdClient {
         })
     }
 
-    pub fn delete(&self, key: &str) -> TsoResult<DeleteResponse> {
-        self.rt
-            .block_on(async { self.client.lock().delete(key, None).await })
-            .map_err(|e| anyhow::anyhow!(e))
+    pub fn delete(&self, key: &str) -> TsoResult<()> {
+        let resp = self
+            .do_in_txn(Txn::new().and_then(vec![TxnOp::delete(key.to_owned(), None)]))
+            .map_err(|e| anyhow::anyhow!(TsoError::EtcdKVDelete(e)))?;
+        if !resp.succeeded() {
+            anyhow::bail!(TsoError::EtcdTxnConflict)
+        } else {
+            Ok(())
+        }
     }
 
-    pub fn do_in_txn(&self, txn: Txn) -> TsoResult<TxnResponse> {
+    fn do_in_txn(&self, txn: Txn) -> TsoResult<TxnResponse> {
         self.rt
             .block_on(async { self.client.lock().txn(txn).await })
             .map_err(|e| anyhow::anyhow!(e))
@@ -194,6 +304,7 @@ impl EtcdClient {
     }
 }
 
+// watch api
 impl EtcdClient {
     pub fn try_watch(
         &self,
