@@ -15,7 +15,8 @@ impl Constant {
     /// minimus loop interval
     pub const LOOP_MIN_INTERVAL_MILLIS: u64 = 100;
 
-    /// ETCD
+    /// Watch
     pub const WATCH_LOOP_UNHEALTHY_TIMEOUT_MILLIS: u64 = 60 * 1_000;
     pub const REQUEST_PROGRESS_INTERVAL_MILLIS: u64 = 1_000;
+    pub const WATCHER_NEW_TIMEOUT_MILLIS: u64 = 3_000;
 }

@@ -1,8 +1,8 @@
 use std::sync::{atomic::AtomicU64, Arc};
 
-use coarsetime::{Clock, Duration,}; 
+use coarsetime::{Clock, Duration};
 use scopeguard::defer;
-use tokio::{runtime::Runtime, sync::mpsc::UnboundedReceiver, time::Instant};
+use tokio::{sync::mpsc::UnboundedReceiver, time::Instant};
 
 use crate::{
     allocator::UnixTimeStamp,
@@ -91,76 +91,67 @@ impl Lease {
             Clock::now_since_epoch().as_millis() > expire_time
         }
     }
- 
 
     /// KeepAlive auto renews the lease and update expire_time
     /// Will block_on until keep_alive failed or exit_signal
-    pub fn keep_alive(
-        &self,
-        rt: &Runtime,
-        etcd_client: Arc<EtcdClient>, 
+    pub async fn keep_alive(
+        self: Arc<Lease>,
+        etcd_client: Arc<EtcdClient>,
         mut exit_signal: ExitSignal,
-    ) { 
+    ) {
         defer! {
             log::info!("lease keep alive stopped, purpose: {}", self.purpose);
         };
 
-        let mut time_ch = self.keep_alive_worker(
-            &rt,
-            self.lease_timeout / 3,
-            etcd_client,
-            exit_signal.clone(),
-        );
+        let mut time_ch =
+            self.keep_alive_worker(self.lease_timeout / 3, etcd_client, exit_signal.clone());
 
-        rt.block_on(async {
-            let timer = tokio::time::sleep(self.lease_timeout.into());
-            tokio::pin!(timer);
+        let timer = tokio::time::sleep(self.lease_timeout.into());
+        tokio::pin!(timer);
 
-            let mut max_expire= 0;
-            loop {
-                tokio::select! {
-                    biased;
-                    time = time_ch.recv() =>{
-                        if let Some(t) = time {
-                            if t > max_expire {
-                                max_expire = t;
-                                // Check again to make sure the `expireTime` still needs to be updated
-                                if exit_signal.try_exit() {
-                                    return;
-                                }
-                                self.set_expire_time(t);
+        let mut max_expire = 0;
+        loop {
+            tokio::select! {
+                biased;
+                time = time_ch.recv() =>{
+                    if let Some(t) = time {
+                        if t > max_expire {
+                            max_expire = t;
+                            // Check again to make sure the `expireTime` still needs to be updated
+                            if exit_signal.try_exit() {
+                                return;
                             }
-                        } else {
-                            return;
+                            self.set_expire_time(t);
                         }
-                         
-                         // Stop the timer if it's not stopped
-                        if !timer.is_elapsed(){ 
-                            tokio::select! {
-                                _ = &mut timer => {}   // try to drain from the channel
-                                else => { break; }
-                            }
-                        }
-
-                        // We need be careful here
-                        timer.as_mut().reset(Instant::now()+self.lease_timeout.into());
-                    }
-                    _ = &mut timer => {  
-                        log::info!("keep alive lease too slow, timeout-duration: {} millis, actual-expire: {} millis, purpose: {}",self.lease_timeout.as_millis(), self.get_expire_time(), self.purpose);
+                    } else {
                         return;
                     }
-                    _ = exit_signal.recv() => {
-                        return;
+
+                    // Stop the timer if it's not stopped
+                    if !timer.is_elapsed(){
+                        tokio::select! {
+                            _ = &mut timer => {}   // try to drain from the channel
+                            else => {}
+                        }
                     }
+
+                    // We need be careful here
+                    timer.as_mut().reset(Instant::now()+self.lease_timeout.into());
+                }
+                _ = &mut timer => {
+                    log::info!("keep alive lease too slow, timeout-duration: {} millis, actual-expire: {} millis, purpose: {}",self.lease_timeout.as_millis(), self.get_expire_time(), self.purpose);
+                    return;
+                }
+                _ = exit_signal.recv() => {
+                    return;
                 }
             }
-        });
+        }
     }
 
     /// Periodically call `lease.keep_alive_once` and post back latest received expire time into the channel
     fn keep_alive_worker(
         &self,
-        rt: &Runtime,
         interval: Duration,
         etcd_client: Arc<EtcdClient>,
         mut exit_signal: ExitSignal,
@@ -170,7 +161,7 @@ impl Lease {
         let purpose = self.purpose.to_owned();
         let lease_id = self.lease_id;
         let lease_timeout = self.lease_timeout;
-        rt.spawn(async move {
+        tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval.into());
             let tick = ticker.tick();
             tokio::pin!(tick);
@@ -231,11 +222,11 @@ impl Lease {
 
                 tokio::select! {
                     biased;
-                    _ = &mut tick => {
-                        last_time = start;
-                    }
                     _ = exit_signal.recv() => {
                         return;
+                    }
+                    _ = &mut tick => {
+                        last_time = start;
                     }
                 }
             }

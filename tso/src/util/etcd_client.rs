@@ -3,7 +3,7 @@ use std::{fmt::Debug, sync::Arc, time::Duration};
 use coarsetime::Instant;
 use etcd_client::{
     Client, DeleteResponse, GetResponse, LeaseGrantResponse, LeaseKeepAliveResponse,
-    LeaseRevokeResponse, Txn, TxnResponse, WatchOptions, WatchResponse, WatchStream, Watcher,
+    LeaseRevokeResponse, Txn, TxnResponse, WatchOptions, WatchStream, Watcher,
 };
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
@@ -113,11 +113,11 @@ impl EtcdClient {
                     resp = &mut handle => {
                         return resp.map_err(|e| anyhow::anyhow!(e));
                     }
-                    _ = &mut timeout => {
-                        anyhow::bail!(TsoError::TaskTimeout);
-                    }
                     _ = exit_signal.recv() => {
                         anyhow::bail!(TsoError::TaskCancel);
+                    }
+                    _ = &mut timeout => {
+                        anyhow::bail!(TsoError::TaskTimeout);
                     }
                 };
             }
@@ -153,11 +153,11 @@ impl EtcdClient {
                             Err(e) => anyhow::bail!(e),
                         }
                     }
-                    _ = &mut timeout => {
-                        anyhow::bail!(TsoError::TaskTimeout);
-                    }
                     _ = exit_signal.recv() => {
                         anyhow::bail!(TsoError::TaskCancel);
+                    }
+                    _ = &mut timeout => {
+                        anyhow::bail!(TsoError::TaskTimeout);
                     }
                 };
             }
@@ -182,11 +182,11 @@ impl EtcdClient {
                     resp = &mut handle => {
                         return resp.map_err(|e| anyhow::anyhow!(e));
                     }
-                    _ = &mut timeout => {
-                        anyhow::bail!(TsoError::TaskTimeout);
-                    }
                     _ = exit_signal.recv() => {
                         anyhow::bail!(TsoError::TaskCancel);
+                    }
+                    _ = &mut timeout => {
+                        anyhow::bail!(TsoError::TaskTimeout);
                     }
                 };
             }
@@ -195,19 +195,67 @@ impl EtcdClient {
 }
 
 impl EtcdClient {
-    pub fn watch(
+    pub fn try_watch(
         &self,
         key: &str,
         options: Option<WatchOptions>,
+        timeout: u64,
     ) -> TsoResult<(Watcher, WatchStream)> {
         self.runtime
-            .block_on(async { self.client.lock().watch(key, options).await })
+            .block_on(async {
+                let mut lock = self.client.lock();
+                let handle = lock.watch(key, options);
+                tokio::pin!(handle);
+
+                let timeout = tokio::time::sleep(Duration::from_millis(timeout));
+                tokio::pin!(timeout);
+
+                let exit_signal = self.exit_signal.clone();
+                tokio::pin!(exit_signal);
+
+                loop {
+                    tokio::select! {
+                        biased;
+                        resp = &mut handle => {
+                            return resp.map_err(|e| anyhow::anyhow!(e));
+                        }
+                        _ = exit_signal.recv() => {
+                            anyhow::bail!(TsoError::TaskCancel);
+                        }
+                        _ = &mut timeout => {
+                            anyhow::bail!(TsoError::TaskTimeout);
+                        }
+                    };
+                }
+            })
             .map_err(|e| anyhow::anyhow!(e))
     }
 
-    pub fn poll_watch_stream(&self, stream: &mut WatchStream) -> TsoResult<Option<WatchResponse>> {
-        self.runtime
-            .block_on(async { stream.message().await })
-            .map_err(|e| anyhow::anyhow!(e))
+    pub fn try_request_progress(&self, watcher: &mut Watcher, timeout: u64) -> TsoResult<()> {
+        self.runtime.block_on(async {
+            let handle = watcher.request_progress();
+            tokio::pin!(handle);
+
+            let timeout = tokio::time::sleep(Duration::from_millis(timeout));
+            tokio::pin!(timeout);
+
+            let exit_signal = self.exit_signal.clone();
+            tokio::pin!(exit_signal);
+
+            loop {
+                tokio::select! {
+                    biased;
+                    resp = &mut handle => {
+                        return resp.map_err(|e| anyhow::anyhow!(e));
+                    }
+                    _ = exit_signal.recv() => {
+                        anyhow::bail!(TsoError::TaskCancel);
+                    }
+                    _ = &mut timeout => {
+                        anyhow::bail!(TsoError::TaskTimeout);
+                    }
+                };
+            }
+        })
     }
 }

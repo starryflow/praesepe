@@ -9,6 +9,9 @@ pub enum TsoError {
     EtcdTxnInternal(Error),
     #[error("EtcdGrantLease, cause: {0}")]
     EtcdGrantLease(Error),
+    #[error("EtcdKVDelete, cause: {0}")]
+    EtcdKVDelete(Error),
+
     #[error("ErrCheckCampaign")]
     CheckCampaign,
     #[error("ErrBytesToU64")]

@@ -4,13 +4,17 @@ use etcd_client::{Compare, Txn, TxnOp, TxnOpResponse};
 
 use crate::{
     error::TsoError,
-    util::{etcd_client::EtcdClient, utils::Utils},
+    util::{constant::Constant, etcd_client::EtcdClient, utils::Utils},
     TsoResult,
 };
 
-pub struct EtcdUtil;
+pub struct ClusterUtil;
 
-impl EtcdUtil {
+impl ClusterUtil {
+    pub fn root_path(cluster_id: u64) -> String {
+        format!("{}/{}", Constant::ROOT_PATH, cluster_id)
+    }
+
     pub fn init_cluster_id(etcd_client: &EtcdClient, key: &str) -> TsoResult<u64> {
         // Get cluster key to parse the cluster ID
         let resp = etcd_client.get(key)?;

@@ -10,19 +10,23 @@ use super::ParticipantInfo;
 pub trait TsoLeadership: Send + Sync + Debug {
     /// campaign the leader with given lease and returns a leadership
     fn campaign(&self, lease_timeout: i64, leader_data: &str) -> TsoResult<()>;
-    /// deletes the corresponding leader by the leader_path as the key
-    fn delete_leader_key(&self) -> TsoResult<()>;
-
-    /// returns whether the leadership is still available
-    fn check(&self) -> bool;
-    fn get_persistent_leader(&self) -> TsoResult<(Option<ParticipantInfo>, i64)>;
 
     /// keep the leadership available by update the lease's expired time continuously
     fn keep(&self, exit_signal: ExitSignal);
+    /// returns whether the leadership is still available
+    fn check(&self) -> bool;
+
     /// watch the changes of the leadership, usually is used to detect the leadership stepping down and restart an election as soon as possible
     fn watch(&self, revision: i64, exit_signal: ExitSignal);
+    async fn async_watch(&self, _revision: i64, _exit_signal: ExitSignal) {}
+
     /// Reset does some defer jobs such as closing lease, resetting lease etc
     fn reset(&self);
+
+    /// GetLeader gets the corresponding leader from etcd by given leader_path (as the key)
+    fn get_leader(&self) -> TsoResult<(Option<ParticipantInfo>, i64)>;
+    /// deletes the corresponding leader by the leader_path as the key
+    fn delete_leader_key(&self) -> TsoResult<()>;
 }
 
 pub enum TsoLeadershipKind {
@@ -38,20 +42,13 @@ impl TsoLeadership for AlwaysLeader {
         unreachable!("As AlwaysLeader, not need implement campaign logic")
     }
 
-    fn delete_leader_key(&self) -> TsoResult<()> {
-        unreachable!("As AlwaysLeader, not need implement delete_leader_key logic")
+    fn keep(&self, _: ExitSignal) {
+        unreachable!("As AlwaysLeader, not need implement keep logic")
     }
 
     fn check(&self) -> bool {
         // As AlwaysLeader, always return true
         true
-    }
-    fn get_persistent_leader(&self) -> TsoResult<(Option<ParticipantInfo>, i64)> {
-        unreachable!("As AlwaysLeader, not need implement get_persistent_leader logic")
-    }
-
-    fn keep(&self, _: ExitSignal) {
-        unreachable!("As AlwaysLeader, not need implement keep logic")
     }
 
     fn watch(&self, _: i64, _: ExitSignal) {
@@ -60,6 +57,14 @@ impl TsoLeadership for AlwaysLeader {
 
     fn reset(&self) {
         // do nothing
+    }
+
+    fn get_leader(&self) -> TsoResult<(Option<ParticipantInfo>, i64)> {
+        unreachable!("As AlwaysLeader, not need implement get_persistent_leader logic")
+    }
+
+    fn delete_leader_key(&self) -> TsoResult<()> {
+        unreachable!("As AlwaysLeader, not need implement delete_leader_key logic")
     }
 }
 

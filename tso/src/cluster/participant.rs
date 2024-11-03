@@ -1,10 +1,11 @@
-use coarsetime::Clock;
-use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
 use std::{
     sync::{atomic::AtomicU64, Arc},
     time::Duration,
 };
+
+use coarsetime::Clock;
+use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     allocator::UnixTimeStamp,
@@ -162,7 +163,7 @@ impl Participant {
     /// checks if someone else is taking the leadership. If yes, returns the leader;
     /// otherwise returns a bool which indicates if it is needed to check later
     pub fn check_leader(&self) -> (Option<(ParticipantInfo, i64)>, bool) {
-        match self.leadership.get_persistent_leader() {
+        match self.leadership.get_leader() {
             Ok((Some(leader), revision)) => {
                 if self.is_same_leader(&leader) {
                     // oh, we are already the leader, which indicates we may meet something wrong in previous CampaignLeader. We should delete the leadership and campaign again
