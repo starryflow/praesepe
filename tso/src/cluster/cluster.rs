@@ -1,9 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian};
 use coarsetime::Clock;
 
-use crate::{util::constant::Constant, TsoResult};
-
-use super::EtcdClient;
+use crate::{etcd::EtcdClient, util::constant::Constant, TsoResult};
 
 pub struct Cluster;
 

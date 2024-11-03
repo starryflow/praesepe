@@ -17,9 +17,9 @@ use tokio::{
     sync::OnceCell,
 };
 
-use crate::{bootstrap::ExitSignal, util::constant::Constant, TsoResult};
+use crate::{bootstrap::ExitSignal, etcd::EtcdClient, util::constant::Constant, TsoResult};
 
-use super::{lease::Lease, EtcdClient, ParticipantInfo, TsoLeadership};
+use super::{lease::Lease, ParticipantInfo, TsoLeadership};
 
 pub struct EtcdLeadership {
     purpose: String,

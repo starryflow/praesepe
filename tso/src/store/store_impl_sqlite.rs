@@ -34,7 +34,7 @@ SELECT TSO_TS FROM TSO_TIMESTAMP WHERE TSO_PATH = $1
             let affected = sqlx::query::<Sqlite>(
                 r#"
 UPDATE TSO_TIMESTAMP
-SET TSO_TS = $1, UPDATE_NODE = $2
+SET TSO_TS = $1, TSO_NODE = $2
 WHERE TSO_PATH = $3
 "#,
             )
@@ -48,7 +48,7 @@ WHERE TSO_PATH = $3
             if affected == 0 {
                 sqlx::query::<Sqlite>(
                     r#"
-INSERT INTO TSO_TIMESTAMP (TSO_PATH, TSO_TS, UPDATE_NODE)
+INSERT INTO TSO_TIMESTAMP (TSO_PATH, TSO_TS, TSO_NODE)
 VALUES ($1, $2, $3)
 ON CONFLICT(TSO_PATH) DO NOTHING;
 "#,

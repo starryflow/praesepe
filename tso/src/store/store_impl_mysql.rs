@@ -35,7 +35,7 @@ SELECT TSO_TS FROM TSO_TIMESTAMP WHERE TSO_PATH = ?;
             let affected = sqlx::query::<MySql>(
                 r#"
 UPDATE TSO_TIMESTAMP
-SET TSO_TS = ?, UPDATE_NODE = ?
+SET TSO_TS = ?, TSO_NODE = ?
 WHERE TSO_PATH = ?;
 "#,
             )
@@ -49,7 +49,7 @@ WHERE TSO_PATH = ?;
             if affected == 0 {
                 sqlx::query::<MySql>(
                     r#"
-INSERT IGNORE INTO TSO_TIMESTAMP (TSO_PATH, TSO_TS, UPDATE_NODE)
+INSERT IGNORE INTO TSO_TIMESTAMP (TSO_PATH, TSO_TS, TSO_NODE)
 VALUES (?, ?, ?);
 "#,
                 )

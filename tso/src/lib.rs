@@ -3,6 +3,7 @@ mod bootstrap;
 mod cluster;
 mod config;
 mod error;
+mod etcd;
 mod metric;
 mod store;
 mod util;

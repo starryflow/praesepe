@@ -12,12 +12,13 @@ use crate::{
     bootstrap::ExitSignal,
     config::Config,
     error::TsoError,
+    etcd::EtcdClient,
     util::{constant::Constant, utils::Utils},
     TsoResult,
 };
 
 use super::{
-    leadership::AlwaysLeader, leadership_impl_etcd::EtcdLeadership, EtcdClient, TsoLeadership,
+    leadership::AlwaysLeader, leadership_impl_etcd::EtcdLeadership, TsoLeadership,
     TsoLeadershipKind,
 };
 

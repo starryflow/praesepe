@@ -1,8 +1,9 @@
 use std::time::Duration;
 
 use crate::{
-    cluster::{Cluster, EtcdClient, Participant},
+    cluster::{Cluster, Participant},
     config::Config,
+    etcd::EtcdClient,
     store::TsoStoreFactory,
     util::constant::Constant,
     AllocatorManager, TsoResult,

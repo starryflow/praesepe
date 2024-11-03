@@ -5,11 +5,9 @@ use scopeguard::defer;
 use tokio::{sync::mpsc::UnboundedReceiver, time::Instant};
 
 use crate::{
-    allocator::UnixTimeStamp, bootstrap::ExitSignal, error::TsoError, util::constant::Constant,
-    TsoResult,
+    allocator::UnixTimeStamp, bootstrap::ExitSignal, error::TsoError, etcd::EtcdClient,
+    util::constant::Constant, TsoResult,
 };
-
-use super::EtcdClient;
 
 /// Lease is used as the low-level mechanism for campaigning and renewing elected leadership.
 /// The way to gain and maintain leadership is to update and keep the lease alive continuously.
