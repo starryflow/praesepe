@@ -6,12 +6,12 @@ use crate::TsoResult;
 
 pub struct SqliteStore {
     conn_pool: SqlitePool,
-    runtime: Runtime,
+    rt: Runtime,
 }
 
 impl TsoStore for SqliteStore {
     fn load_timestamp(&self, path: &str) -> TsoResult<u64> {
-        self.runtime.block_on(async {
+        self.rt.block_on(async {
             let records = sqlx::query::<Sqlite>(
                 r#"
 SELECT TSO_TS FROM TSO_TIMESTAMP WHERE TSO_PATH = $1
@@ -30,7 +30,7 @@ SELECT TSO_TS FROM TSO_TIMESTAMP WHERE TSO_PATH = $1
     }
 
     fn save_timestamp(&self, path: &str, ts: u64, node_id: &str) -> TsoResult<()> {
-        self.runtime.block_on(async {
+        self.rt.block_on(async {
             let affected = sqlx::query::<Sqlite>(
                 r#"
 UPDATE TSO_TIMESTAMP
@@ -67,8 +67,8 @@ ON CONFLICT(TSO_PATH) DO NOTHING;
 
 impl SqliteStore {
     pub fn new(url: &str) -> Self {
-        let runtime = Runtime::new().unwrap();
-        let conn_pool = runtime.block_on(async { SqlitePool::connect_lazy(url).unwrap() });
-        SqliteStore { conn_pool, runtime }
+        let rt = Runtime::new().unwrap();
+        let conn_pool = rt.block_on(async { SqlitePool::connect_lazy(url).unwrap() });
+        SqliteStore { conn_pool, rt }
     }
 }

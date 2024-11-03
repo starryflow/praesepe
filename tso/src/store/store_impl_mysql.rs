@@ -7,12 +7,12 @@ use super::TsoStore;
 
 pub struct MySQLStore {
     conn_pool: MySqlPool,
-    runtime: Runtime,
+    rt: Runtime,
 }
 
 impl TsoStore for MySQLStore {
     fn load_timestamp(&self, path: &str) -> TsoResult<u64> {
-        self.runtime.block_on(async {
+        self.rt.block_on(async {
             let records = sqlx::query::<MySql>(
                 r#"
 SELECT TSO_TS FROM TSO_TIMESTAMP WHERE TSO_PATH = ?;
@@ -31,7 +31,7 @@ SELECT TSO_TS FROM TSO_TIMESTAMP WHERE TSO_PATH = ?;
     }
 
     fn save_timestamp(&self, path: &str, ts: u64, node_id: &str) -> TsoResult<()> {
-        self.runtime.block_on(async {
+        self.rt.block_on(async {
             let affected = sqlx::query::<MySql>(
                 r#"
 UPDATE TSO_TIMESTAMP
@@ -67,8 +67,8 @@ VALUES (?, ?, ?);
 
 impl MySQLStore {
     pub fn new(url: &str) -> Self {
-        let runtime = Runtime::new().unwrap();
-        let conn_pool = runtime.block_on(async { MySqlPool::connect_lazy(url).unwrap() });
-        MySQLStore { conn_pool, runtime }
+        let rt = Runtime::new().unwrap();
+        let conn_pool = rt.block_on(async { MySqlPool::connect_lazy(url).unwrap() });
+        MySQLStore { conn_pool, rt }
     }
 }

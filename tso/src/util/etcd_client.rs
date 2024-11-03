@@ -13,8 +13,8 @@ use crate::{bootstrap::ExitSignal, error::TsoError, util::constant::Constant, Ts
 pub struct EtcdClient {
     endpoints: String,
     client: Arc<Mutex<Client>>,
-    runtime: Runtime,
     exit_signal: ExitSignal,
+    rt: Runtime,
 }
 
 impl Debug for EtcdClient {
@@ -25,14 +25,14 @@ impl Debug for EtcdClient {
 
 impl EtcdClient {
     pub fn new(url: &str, exit_signal: ExitSignal) -> Self {
-        let runtime = Runtime::new().unwrap();
+        let rt = Runtime::new().unwrap();
         let endpoints = [url];
-        let client = runtime.block_on(async { Client::connect(endpoints, None).await.unwrap() });
+        let client = rt.block_on(async { Client::connect(endpoints, None).await.unwrap() });
         Self {
             endpoints: url.to_owned(),
             client: Arc::from(Mutex::new(client)),
-            runtime,
             exit_signal,
+            rt,
         }
     }
 
@@ -48,7 +48,7 @@ impl EtcdClient {
     pub fn get(&self, key: &str) -> TsoResult<GetResponse> {
         let start = Instant::now();
         let resp = self
-            .runtime
+            .rt
             .block_on(async { self.client.lock().get(key, None).await })
             .map_err(|e| anyhow::anyhow!(e));
         let cost = start.elapsed().as_millis();
@@ -64,7 +64,7 @@ impl EtcdClient {
     }
 
     pub fn get_with_mod_rev(&self, key: &str) -> TsoResult<Option<(Vec<u8>, i64)>> {
-        self.runtime.block_on(async {
+        self.rt.block_on(async {
             match self.client.lock().get(key, None).await {
                 Ok(mut resp) => {
                     if resp.count() > 0 {
@@ -81,13 +81,13 @@ impl EtcdClient {
     }
 
     pub fn delete(&self, key: &str) -> TsoResult<DeleteResponse> {
-        self.runtime
+        self.rt
             .block_on(async { self.client.lock().delete(key, None).await })
             .map_err(|e| anyhow::anyhow!(e))
     }
 
     pub fn do_in_txn(&self, txn: Txn) -> TsoResult<TxnResponse> {
-        self.runtime
+        self.rt
             .block_on(async { self.client.lock().txn(txn).await })
             .map_err(|e| anyhow::anyhow!(e))
     }
@@ -96,7 +96,7 @@ impl EtcdClient {
 // lease api
 impl EtcdClient {
     pub fn try_grant(&self, ttl_sec: i64, timeout: u64) -> TsoResult<LeaseGrantResponse> {
-        self.runtime.block_on(async {
+        self.rt.block_on(async {
             let mut lock = self.client.lock();
             let handle = lock.lease_grant(ttl_sec, None);
             tokio::pin!(handle);
@@ -129,7 +129,7 @@ impl EtcdClient {
         lease_id: i64,
         timeout: u64,
     ) -> TsoResult<LeaseKeepAliveResponse> {
-        self.runtime.block_on(async {
+        self.rt.block_on(async {
             let mut lock = self.client.lock();
             let handle = lock.lease_keep_alive(lease_id);
             tokio::pin!(handle);
@@ -165,7 +165,7 @@ impl EtcdClient {
     }
 
     pub fn try_revoke(&self, lease_id: i64, timeout: u64) -> TsoResult<LeaseRevokeResponse> {
-        self.runtime.block_on(async {
+        self.rt.block_on(async {
             let mut lock = self.client.lock();
             let handle = lock.lease_revoke(lease_id);
             tokio::pin!(handle);
@@ -201,7 +201,7 @@ impl EtcdClient {
         options: Option<WatchOptions>,
         timeout: u64,
     ) -> TsoResult<(Watcher, WatchStream)> {
-        self.runtime
+        self.rt
             .block_on(async {
                 let mut lock = self.client.lock();
                 let handle = lock.watch(key, options);
@@ -232,7 +232,7 @@ impl EtcdClient {
     }
 
     pub fn try_request_progress(&self, watcher: &mut Watcher, timeout: u64) -> TsoResult<()> {
-        self.runtime.block_on(async {
+        self.rt.block_on(async {
             let handle = watcher.request_progress();
             tokio::pin!(handle);
 
