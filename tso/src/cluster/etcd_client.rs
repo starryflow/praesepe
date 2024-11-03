@@ -9,11 +9,12 @@ use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 
 use crate::{
-    bootstrap::ExitSignal, cluster::ParticipantInfo, error::TsoError, util::constant::Constant,
+    bootstrap::ExitSignal,
+    cluster::ParticipantInfo,
+    error::TsoError,
+    util::{constant::Constant, utils::Utils},
     TsoResult,
 };
-
-use super::utils::Utils;
 
 pub struct EtcdClient {
     endpoints: String,

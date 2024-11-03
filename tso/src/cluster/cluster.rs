@@ -1,14 +1,13 @@
 use byteorder::{ByteOrder, LittleEndian};
 use coarsetime::Clock;
 
-use crate::{
-    util::{constant::Constant, etcd_client::EtcdClient},
-    TsoResult,
-};
+use crate::{util::constant::Constant, TsoResult};
 
-pub struct ClusterUtil;
+use super::EtcdClient;
 
-impl ClusterUtil {
+pub struct Cluster;
+
+impl Cluster {
     pub fn root_path(cluster_id: u64) -> String {
         format!("{}/{}", Constant::ROOT_PATH, cluster_id)
     }

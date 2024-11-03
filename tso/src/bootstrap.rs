@@ -1,10 +1,10 @@
 use std::time::Duration;
 
 use crate::{
-    cluster::Participant,
+    cluster::{Cluster, EtcdClient, Participant},
     config::Config,
     store::TsoStoreFactory,
-    util::{cluster_util::ClusterUtil, constant::Constant, etcd_client::EtcdClient},
+    util::constant::Constant,
     AllocatorManager, TsoResult,
 };
 
@@ -23,12 +23,12 @@ impl Bootstrap {
         etcd_client: EtcdClient,
         exit_signal: ExitSignal,
     ) -> TsoResult<()> {
-        let cluster_id = ClusterUtil::init_cluster_id(&etcd_client, Constant::CLUSTER_ID_PATH)
+        let cluster_id = Cluster::init_cluster_id(&etcd_client, Constant::CLUSTER_ID_PATH)
             .inspect_err(|e| log::error!("failed to init cluster id, cause: {}", e))?;
 
         log::info!("init cluster id, cluster-id: {}", cluster_id);
 
-        let root_path = ClusterUtil::root_path(cluster_id);
+        let root_path = Cluster::root_path(cluster_id);
         let member = Participant::new_and_start(&config, root_path, etcd_client);
 
         let store = TsoStoreFactory::get_instance(&config.store_kind);
