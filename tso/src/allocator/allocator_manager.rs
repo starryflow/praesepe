@@ -26,7 +26,7 @@ pub struct AllocatorManager {
     global_tso_allocator: GlobalTsoAllocator,
 
     thread_pool: ThreadPool,
-    leadership: Arc<dyn TsoLeadership>,
+    leadership: Arc<TsoLeadership>,
     store: Box<dyn TsoStore>,
 
     physical_last_update_millis: AtomicU64,

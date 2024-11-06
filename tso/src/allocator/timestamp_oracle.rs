@@ -216,7 +216,7 @@ impl TimestampOracle {
     pub fn reset_user_timestamp(
         &self,
         store: &dyn TsoStore,
-        leadership: &dyn TsoLeadership,
+        leadership: &TsoLeadership,
         tso: u64,
         ignore_smaller: bool,
         skip_upper_bound_check: bool,
@@ -382,7 +382,7 @@ impl TimestampOracle {
     #[fastrace::trace]
     pub fn get_timestamp(
         &self,
-        leadership: &dyn TsoLeadership,
+        leadership: &TsoLeadership,
         count: u32,
         suffix_bits: u32,
     ) -> TsoResult<Timestamp> {

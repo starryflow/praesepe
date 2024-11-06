@@ -17,14 +17,11 @@ use crate::{
     TsoResult,
 };
 
-use super::{
-    leadership::AlwaysLeader, leadership_impl_etcd::EtcdLeadership, TsoLeadership,
-    TsoLeadershipKind,
-};
+use super::TsoLeadership;
 
 /// Participant is used for the election related logic
 pub struct Participant {
-    pub(crate) leadership: Arc<dyn TsoLeadership>,
+    pub(crate) leadership: Arc<TsoLeadership>,
     leader: Mutex<Option<ParticipantInfo>>,
 
     member: ParticipantInfo,
@@ -71,8 +68,7 @@ impl Participant {
         etcd_client: EtcdClient,
     ) -> Self {
         let leader_path = format!("{}/leader", root_path,);
-        let leadership = Self::new_leadership(
-            &TsoLeadershipKind::Etcd,
+        let leadership = TsoLeadership::new(
             leader_path.as_str(),
             "TSO leader election",
             leadership_worker_size,
@@ -85,24 +81,6 @@ impl Participant {
             member,
             member_value,
             last_leader_updated_time: last_leader_updated_time.into(),
-        }
-    }
-
-    fn new_leadership(
-        kind: &TsoLeadershipKind,
-        leader_key: &str,
-        purpose: &str,
-        leadership_worker_size: usize,
-        etcd_client: EtcdClient,
-    ) -> Box<dyn TsoLeadership> {
-        match kind {
-            TsoLeadershipKind::Etcd => Box::new(EtcdLeadership::new(
-                leader_key,
-                purpose,
-                leadership_worker_size,
-                etcd_client,
-            )),
-            TsoLeadershipKind::AlwaysLeader => Box::new(AlwaysLeader),
         }
     }
 }

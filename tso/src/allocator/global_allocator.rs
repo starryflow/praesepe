@@ -184,7 +184,7 @@ impl GlobalTsoAllocator {
     ///  1. Collect the max Local TSO from all Local TSO Allocator leaders and write it back to them as max_ts.
     ///  2. Estimate a max_ts and try to write it to all Local TSO Allocator leaders directly to reduce the RTT.
     /// During the process, if the estimated max_ts is not accurate, it will fallback to the collecting way
-    pub fn generate_ts(&self, leadership: &dyn TsoLeadership, count: u32) -> TsoResult<Timestamp> {
+    pub fn generate_ts(&self, leadership: &TsoLeadership, count: u32) -> TsoResult<Timestamp> {
         if !leadership.check() {
             self.timestamp_oracle.metric.not_leader_event.inc();
             return Ok(Timestamp::default());
@@ -202,7 +202,7 @@ impl GlobalTsoAllocator {
     pub fn set_tso(
         &self,
         store: &dyn TsoStore,
-        leadership: &dyn TsoLeadership,
+        leadership: &TsoLeadership,
         ts: u64,
         ignore_smaller: bool,
         skip_upper_bound_check: bool,
@@ -233,7 +233,7 @@ impl GlobalTsoAllocator {
     pub fn write_tso(
         &self,
         store: &dyn TsoStore,
-        leadership: &dyn TsoLeadership,
+        leadership: &TsoLeadership,
         max_ts: Timestamp,
     ) -> TsoResult<()> {
         let current_tso = self.get_current_tso()?;

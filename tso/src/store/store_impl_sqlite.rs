@@ -34,7 +34,7 @@ SELECT TSO_TS FROM TSO_TIMESTAMP WHERE TSO_PATH = $1
             let affected = sqlx::query::<Sqlite>(
                 r#"
 UPDATE TSO_TIMESTAMP
-SET TSO_TS = $1, TSO_NODE = $2
+SET TSO_TS = $1, TSO_NODE = $2, UPDATED = CURRENT_TIMESTAMP
 WHERE TSO_PATH = $3
 "#,
             )
