@@ -35,9 +35,9 @@ sqlx = { workspace = true }
 # multi-thread
 crossbeam = { workspace = true }
 parking_lot = { workspace = true }
-rayon = { workspace = true }
 
 # observability
+env_logger = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }
 prometheus = { workspace = true }

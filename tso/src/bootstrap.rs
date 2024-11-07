@@ -1,9 +1,9 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     cluster::{Cluster, Participant},
     config::Config,
-    etcd::EtcdClient,
+    etcd::EtcdFacade,
     store::TsoStoreFactory,
     util::constant::Constant,
     AllocatorManager, TsoResult,
@@ -12,18 +12,22 @@ use crate::{
 pub struct Bootstrap;
 
 impl Bootstrap {
-    pub fn start_etcd(advertise_client_urls: &str, exit_signal: ExitSignal) -> EtcdClient {
+    pub fn create_etcd(
+        config: &Config,
+        advertise_client_urls: &str,
+        exit_signal: ExitSignal,
+    ) -> EtcdFacade {
         // Start the etcd and HTTP clients, then init the member
-        EtcdClient::new(advertise_client_urls, exit_signal)
+        EtcdFacade::new(config.etcd_kind, advertise_client_urls, exit_signal)
 
         // TODO: init_health_checker
     }
 
     pub fn start_server(
         config: Config,
-        etcd_client: EtcdClient,
+        etcd_client: EtcdFacade,
         exit_signal: ExitSignal,
-    ) -> TsoResult<()> {
+    ) -> TsoResult<Arc<AllocatorManager>> {
         let cluster_id = Cluster::init_cluster_id(&etcd_client, Constant::CLUSTER_ID_PATH)
             .inspect_err(|e| log::error!("failed to init cluster id, cause: {}", e))?;
 
@@ -34,15 +38,18 @@ impl Bootstrap {
 
         let store = TsoStoreFactory::get_instance(&config.store_kind);
 
-        let mut alloc = AllocatorManager::new_and_start(config, member, store, exit_signal.clone());
+        let alloc = AllocatorManager::new_and_start(config, member, store, exit_signal.clone())?;
 
-        alloc.start_global_allocator_loop(exit_signal.clone());
+        alloc
+            .clone()
+            .start_global_allocator_loop(exit_signal.clone())?;
 
         Self::start_server_loop(exit_signal);
-        Ok(())
+
+        Ok(alloc)
     }
 
-    pub fn start_server_loop(mut exit_signal: ExitSignal) {
+    pub fn start_server_loop(_exit_signal: ExitSignal) {
         // TODO: To make sure the etcd leader and TSO leader are on the same server
         // go s.leaderLoop()
 
@@ -60,12 +67,6 @@ impl Bootstrap {
         //     s.initTSOPrimaryWatcher()
         //     s.initSchedulingPrimaryWatcher()
         // }
-
-        loop {
-            if exit_signal.wait_exit() {
-                break;
-            }
-        }
     }
 }
 

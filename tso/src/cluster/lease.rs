@@ -5,7 +5,7 @@ use scopeguard::defer;
 use tokio::{sync::mpsc::UnboundedReceiver, time::Instant};
 
 use crate::{
-    allocator::UnixTimeStamp, bootstrap::ExitSignal, error::TsoError, etcd::EtcdClient,
+    allocator::UnixTimeStamp, bootstrap::ExitSignal, error::TsoError, etcd::EtcdFacade,
     util::constant::Constant, TsoResult,
 };
 
@@ -33,7 +33,7 @@ impl Lease {
     }
 
     /// initialize the lease and expire_time
-    pub fn grant(&mut self, lease_timeout_sec: i64, lease_client: &EtcdClient) -> TsoResult<()> {
+    pub fn grant(&mut self, lease_timeout_sec: i64, lease_client: &EtcdFacade) -> TsoResult<()> {
         let start = Clock::now_since_epoch().as_millis();
 
         let lease_resp = lease_client
@@ -61,7 +61,7 @@ impl Lease {
         Ok(())
     }
 
-    pub fn close(&self, etcd_client: &EtcdClient) {
+    pub fn close(&self, etcd_client: &EtcdFacade) {
         // Reset expire time
         self.set_expire_time(0);
 
@@ -93,7 +93,7 @@ impl Lease {
     /// Will block_on until keep_alive failed or exit_signal
     pub async fn keep_alive(
         self: Arc<Lease>,
-        etcd_client: Arc<EtcdClient>,
+        etcd_client: Arc<EtcdFacade>,
         mut exit_signal: ExitSignal,
     ) {
         defer! {
@@ -150,7 +150,7 @@ impl Lease {
     fn keep_alive_worker(
         &self,
         interval: Duration,
-        etcd_client: Arc<EtcdClient>,
+        etcd_client: Arc<EtcdFacade>,
         mut exit_signal: ExitSignal,
     ) -> UnboundedReceiver<UnixTimeStamp> {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();

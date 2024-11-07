@@ -39,7 +39,7 @@ impl GlobalTsoAllocator {
 
     /// primary_election_loop is used to maintain the TSO primary election and TSO's running allocator.
     pub fn primary_election_loop(
-        &mut self,
+        &self,
         store: &dyn TsoStore,
         config: &Config,
         mut exit_signal: ExitSignal,
@@ -69,12 +69,7 @@ impl GlobalTsoAllocator {
         log::info!("exit the global tso primary election loop");
     }
 
-    fn campaign_leader(
-        &mut self,
-        store: &dyn TsoStore,
-        config: &Config,
-        mut exit_signal: ExitSignal,
-    ) {
+    fn campaign_leader(&self, store: &dyn TsoStore, config: &Config, mut exit_signal: ExitSignal) {
         log::info!(
             "start to campaign the primary, campaign-tso-primary-name: {}",
             self.member.get_name()

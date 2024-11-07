@@ -1,9 +1,10 @@
-use crate::TsoStoreKind;
+use crate::{TsoEtcdKind, TsoStoreKind};
 
 pub struct Config {
     pub leadership_worker_size: usize,
     pub allocator_worker_size: usize,
 
+    pub etcd_kind: TsoEtcdKind,
     pub store_kind: TsoStoreKind,
     /// List of URLs for ETCD Server
     pub etcd_server_urls: String,
@@ -30,6 +31,7 @@ impl Default for Config {
             leadership_worker_size: 4,
             allocator_worker_size: 4,
 
+            etcd_kind: TsoEtcdKind::Shim,
             store_kind: TsoStoreKind::Sqlite("sqlite::memory:".into()),
             etcd_server_urls: "".into(),
 

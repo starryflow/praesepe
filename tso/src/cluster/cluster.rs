@@ -1,7 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian};
 use coarsetime::Clock;
 
-use crate::{etcd::EtcdClient, util::constant::Constant, TsoResult};
+use crate::{etcd::EtcdFacade, util::constant::Constant, TsoResult};
 
 pub struct Cluster;
 
@@ -10,7 +10,7 @@ impl Cluster {
         format!("{}/{}", Constant::ROOT_PATH, cluster_id)
     }
 
-    pub fn init_cluster_id(etcd_client: &EtcdClient, key: &str) -> TsoResult<u64> {
+    pub fn init_cluster_id(etcd_client: &EtcdFacade, key: &str) -> TsoResult<u64> {
         // Get cluster key to parse the cluster ID
         let resp = etcd_client.get_u64(key)?;
 
@@ -22,7 +22,7 @@ impl Cluster {
         }
     }
 
-    fn init_or_get_cluster_id(etcd_client: &EtcdClient, key: &str) -> TsoResult<u64> {
+    fn init_or_get_cluster_id(etcd_client: &EtcdFacade, key: &str) -> TsoResult<u64> {
         // Generate a random cluster ID
         let mut buf: [u8; 32] = [0u8; 32];
         getrandom::getrandom(&mut buf).map_err(|e| anyhow::anyhow!(e))?;

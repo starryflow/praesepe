@@ -1,10 +1,8 @@
 use std::{fmt::Debug, sync::Arc, time::Duration};
 
+use super::{LeaseGrantResponse, LeaseKeepAliveResponse, WatchOptions, WatchStream, Watcher};
 use coarsetime::Instant;
-use etcd_client::{
-    Client, Compare, LeaseGrantResponse, LeaseKeepAliveResponse, LeaseRevokeResponse, PutOptions,
-    Txn, TxnOp, TxnOpResponse, TxnResponse, WatchOptions, WatchStream, Watcher,
-};
+use etcd_client::{Client, Compare, PutOptions, Txn, TxnOp, TxnOpResponse, TxnResponse};
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 
@@ -49,7 +47,7 @@ impl EtcdClient {
     }
 }
 
-//
+// kv api
 impl EtcdClient {
     pub fn get_u64(&self, key: &str) -> TsoResult<Option<u64>> {
         let start = Instant::now();
@@ -222,7 +220,7 @@ impl EtcdClient {
                 tokio::select! {
                     biased;
                     resp = &mut handle => {
-                        return resp.map_err(|e| anyhow::anyhow!(e));
+                        return resp.map(|x|x.into()).map_err(|e| anyhow::anyhow!(e));
                     }
                     _ = exit_signal.recv() => {
                         anyhow::bail!(TsoError::TaskCancel);
@@ -257,7 +255,7 @@ impl EtcdClient {
                     resp = &mut handle => {
                         match resp {
                             Ok((_, mut s)) => match s.message().await {
-                                Ok(Some(r)) => return Ok(r),
+                                Ok(Some(r)) => return Ok(r.into()),
                                 Ok(None) => anyhow::bail!("keep alive failed, no response"),
                                 Err(e) => anyhow::bail!(e),
                             },
@@ -275,7 +273,7 @@ impl EtcdClient {
         })
     }
 
-    pub fn try_revoke(&self, lease_id: i64, timeout: u64) -> TsoResult<LeaseRevokeResponse> {
+    pub fn try_revoke(&self, lease_id: i64, timeout: u64) -> TsoResult<()> {
         self.rt.block_on(async {
             let mut lock = self.client.lock();
             let handle = lock.lease_revoke(lease_id);
@@ -291,7 +289,7 @@ impl EtcdClient {
                 tokio::select! {
                     biased;
                     resp = &mut handle => {
-                        return resp.map_err(|e| anyhow::anyhow!(e));
+                        return resp.map(|_|()).map_err(|e| anyhow::anyhow!(e));
                     }
                     _ = exit_signal.recv() => {
                         anyhow::bail!(TsoError::TaskCancel);
@@ -316,7 +314,7 @@ impl EtcdClient {
         self.rt
             .block_on(async {
                 let mut lock = self.client.lock();
-                let handle = lock.watch(key, options);
+                let handle = lock.watch(key, options.map(|x| x.into()));
                 tokio::pin!(handle);
 
                 let timeout = tokio::time::sleep(Duration::from_millis(timeout));
@@ -329,7 +327,7 @@ impl EtcdClient {
                     tokio::select! {
                         biased;
                         resp = &mut handle => {
-                            return resp.map_err(|e| anyhow::anyhow!(e));
+                            return resp.map(|(x,y)|(x.into(),y.into())).map_err(|e| anyhow::anyhow!(e));
                         }
                         _ = exit_signal.recv() => {
                             anyhow::bail!(TsoError::TaskCancel);
@@ -358,7 +356,7 @@ impl EtcdClient {
                 tokio::select! {
                     biased;
                     resp = &mut handle => {
-                        return resp.map_err(|e| anyhow::anyhow!(e));
+                        return resp;
                     }
                     _ = exit_signal.recv() => {
                         anyhow::bail!(TsoError::TaskCancel);

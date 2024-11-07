@@ -8,15 +8,19 @@ use std::{
 };
 
 use coarsetime::Clock;
-use etcd_client::{EventType, WatchOptions, Watcher};
-
+use etcd_client::EventType;
 use parking_lot::Mutex;
 use tokio::{
     runtime::{Builder, Runtime},
     sync::OnceCell,
 };
 
-use crate::{bootstrap::ExitSignal, etcd::EtcdClient, util::constant::Constant, TsoResult};
+use crate::{
+    bootstrap::ExitSignal,
+    etcd::{EtcdFacade, Watcher},
+    util::constant::Constant,
+    TsoResult,
+};
 
 use super::{lease::Lease, ParticipantInfo};
 
@@ -25,7 +29,7 @@ pub struct TsoLeadership {
 
     /// The lease which is used to get this leadership
     lease: OnceCell<Arc<Lease>>,
-    etcd_client: Arc<EtcdClient>,
+    etcd_client: Arc<EtcdFacade>,
     /// leader_key and leader_value are key-value pair in etcd
     leader_key: String,
     leader_value: Mutex<String>,
@@ -124,9 +128,10 @@ impl TsoLeadership {
             let (new_watcher, mut watch_stream) = match self.etcd_client.try_watch(
                 &self.leader_key,
                 Some(
-                    WatchOptions::new()
+                    etcd_client::WatchOptions::new()
                         .with_start_revision(revision)
-                        .with_progress_notify(),
+                        .with_progress_notify()
+                        .into(),
                 ),
                 Constant::WATCHER_NEW_TIMEOUT_MILLIS,
             ) {
@@ -280,7 +285,7 @@ impl TsoLeadership {
         leader_key: &str,
         purpose: &str,
         worker_size: usize,
-        etcd_client: EtcdClient,
+        etcd_client: EtcdFacade,
     ) -> Self {
         let rt = Builder::new_multi_thread()
             .worker_threads(worker_size)

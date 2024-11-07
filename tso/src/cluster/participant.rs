@@ -12,7 +12,7 @@ use crate::{
     bootstrap::ExitSignal,
     config::Config,
     error::TsoError,
-    etcd::EtcdClient,
+    etcd::EtcdFacade,
     util::{constant::Constant, utils::Utils},
     TsoResult,
 };
@@ -39,7 +39,7 @@ impl Participant {
     pub fn new_and_start(
         config: &Config,
         root_path: String,
-        etcd_client: EtcdClient,
+        etcd_client: EtcdFacade,
     ) -> Participant {
         let leader_info = ParticipantInfo::new(
             &config.name,
@@ -65,7 +65,7 @@ impl Participant {
         member: ParticipantInfo,
         member_value: String,
         last_leader_updated_time: UnixTimeStamp,
-        etcd_client: EtcdClient,
+        etcd_client: EtcdFacade,
     ) -> Self {
         let leader_path = format!("{}/leader", root_path,);
         let leadership = TsoLeadership::new(
@@ -127,7 +127,7 @@ impl Participant {
     }
 
     /// campaign the leadership and make it become a leader
-    pub fn campaign_leader(&mut self, lease_timeout: i64) -> TsoResult<()> {
+    pub fn campaign_leader(&self, lease_timeout: i64) -> TsoResult<()> {
         if !self.campaign_check() {
             anyhow::bail!(TsoError::CheckCampaign);
         }
@@ -178,12 +178,7 @@ impl Participant {
     }
 
     /// watch the changes of the leader
-    pub fn watch_leader(
-        &mut self,
-        leader: ParticipantInfo,
-        revision: i64,
-        exit_signal: ExitSignal,
-    ) {
+    pub fn watch_leader(&self, leader: ParticipantInfo, revision: i64, exit_signal: ExitSignal) {
         self.set_leader(leader);
         self.leadership.watch(revision, exit_signal);
         self.unset_leader();

@@ -8,7 +8,6 @@ use std::{
 };
 
 use coarsetime::Clock;
-use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use crate::{
     allocator::global_allocator::GlobalTsoAllocator,
@@ -25,7 +24,6 @@ use crate::{
 pub struct AllocatorManager {
     global_tso_allocator: GlobalTsoAllocator,
 
-    thread_pool: ThreadPool,
     leadership: Arc<TsoLeadership>,
     store: Box<dyn TsoStore>,
 
@@ -39,43 +37,43 @@ impl AllocatorManager {
         member: Participant,
         store: Box<dyn TsoStore>,
         exit_signal: ExitSignal,
-    ) -> Self {
-        let thread_pool = ThreadPoolBuilder::new()
-            .num_threads(config.allocator_worker_size)
-            .thread_name(|worker_idx| format!("TsoAllocatorWorker@{}", worker_idx))
-            .build()
-            .expect("Create TSO AllocatorWorkerPool failed");
-
+    ) -> TsoResult<Arc<Self>> {
         // setup_global_allocator is used to set up the global allocator, which will initialize the allocator and put it into an allocator daemon. An TSO Allocator should only be set once, and may be initialized and reset multiple times depending on the election
         let leadership = member.leadership.clone();
         let global_tso_allocator = GlobalTsoAllocator::new(&config, member);
 
-        let instance = Self {
+        let instance = Arc::from(Self {
             global_tso_allocator,
-            thread_pool,
             leadership,
             store,
             physical_last_update_millis: 0.into(),
             config,
-        };
-
-        // update tso loop
-        instance.thread_pool.install(|| {
-            instance.tso_allocator_loop(exit_signal);
         });
 
-        instance
+        // update tso loop
+        let allocator_clone = instance.clone();
+        std::thread::Builder::new()
+            .name("TsoAllocatorWorker".into())
+            .spawn(move || {
+                allocator_clone.tso_allocator_loop(exit_signal);
+            })?;
+
+        Ok(instance)
     }
 
     /// leader election, if successful, then initialize allocator
-    pub fn start_global_allocator_loop(&mut self, exit_signal: ExitSignal) {
-        self.thread_pool.install(|| {
-            self.global_tso_allocator.primary_election_loop(
-                self.store.as_ref(),
-                &self.config,
-                exit_signal,
-            )
-        })
+    pub fn start_global_allocator_loop(self: Arc<Self>, exit_signal: ExitSignal) -> TsoResult<()> {
+        let allocator_clone = self.clone();
+        std::thread::Builder::new()
+            .name("TsoElectionWorker".into())
+            .spawn(move || {
+                allocator_clone.global_tso_allocator.primary_election_loop(
+                    self.store.as_ref(),
+                    &self.config,
+                    exit_signal,
+                )
+            })?;
+        Ok(())
     }
 
     /// HandleRequest forwards TSO allocation requests to correct TSO Allocators
