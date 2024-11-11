@@ -56,11 +56,12 @@ impl EtcdShim {
         _key: &str,
     ) -> TsoResult<Option<(ParticipantInfo, i64)>> {
         // always return None
-        Ok(None)
+        Ok(Some((ParticipantInfo::default(), 0)))
     }
 
     pub fn delete(&self, _key: &str) -> TsoResult<()> {
-        unreachable!()
+        // do nothing
+        Ok(())
     }
 }
 

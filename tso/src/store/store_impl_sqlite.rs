@@ -1,4 +1,4 @@
-use sqlx::{Row, Sqlite, SqlitePool};
+use sqlx::{Executor, Row, Sqlite, SqlitePool};
 use tokio::runtime::Runtime;
 
 use super::TsoStore;
@@ -68,7 +68,25 @@ ON CONFLICT(TSO_PATH) DO NOTHING;
 impl SqliteStore {
     pub fn new(url: &str) -> Self {
         let rt = Runtime::new().unwrap();
-        let conn_pool = rt.block_on(async { SqlitePool::connect_lazy(url).unwrap() });
+        let conn_pool = rt.block_on(async {
+            let conn = SqlitePool::connect(url).await.unwrap();
+
+            let _ = conn
+                .execute(
+                    "CREATE TABLE IF NOT EXISTS TSO_TIMESTAMP (
+    ID INTEGER PRIMARY KEY AUTOINCREMENT, -- 主键
+    TSO_PATH TEXT NOT NULL, -- TSO 的标识
+    TSO_TS TEXT NOT NULL, -- TSO 时间戳，全局唯一且自增，无符号 64 位数字
+    TSO_NODE TEXT NOT NULL, -- 最近更新的节点信息
+    CREATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 新增时间
+    UPDATED TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 最近更新时间
+    UNIQUE (TSO_PATH)
+);",
+                )
+                .await;
+
+            conn
+        });
         SqliteStore { conn_pool, rt }
     }
 }

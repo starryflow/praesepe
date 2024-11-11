@@ -88,11 +88,9 @@ impl TsoLeadership {
         //         watcher.cancel();
         //     }
         // }
-        let mut interval = tokio::time::interval(
+        let mut ticker = tokio::time::interval(
             Duration::from_millis(Constant::REQUEST_PROGRESS_INTERVAL_MILLIS).into(),
         );
-        let ticker = interval.tick();
-        tokio::pin!(ticker);
         let mut last_received_response_time = Clock::now_since_epoch().as_millis();
 
         'new_watcher: loop {
@@ -112,7 +110,7 @@ impl TsoLeadership {
                         log::info!("server is closed, exit leader watch loop, revision: {}, leader-key: {}, purpose: {}",revision, self.leader_key, self.purpose);
                         return;
                     }
-                    _ = &mut ticker => {
+                    _ = ticker.tick() => {
                         continue;  // continue to check the etcd availability
                     }
                 }
@@ -145,7 +143,7 @@ impl TsoLeadership {
                             log::info!("server is closed, exit leader watch loop, revision: {}, leader-key: {}, purpose: {}",revision, self.leader_key, self.purpose);
                             return;
                         }
-                        _ = &mut ticker => {
+                        _ = ticker.tick() => {
                             continue;
                         }
                     }
@@ -167,7 +165,7 @@ impl TsoLeadership {
                         log::info!("server is closed, exit leader watch loop, revision: {}, leader-key: {}, purpose: {}",revision, self.leader_key, self.purpose);
                         return;
                     }
-                    _ = &mut ticker => {
+                    _ = ticker.tick() => {
                         // When etcd is not available, the watcher.RequestProgress will block, so we check the etcd availability first
                         if !self.etcd_client.is_healthy(){
                             log::warn!("the connection maybe unhealthy, retry to watch later, leader-key: {}, purpose: {}", self.leader_key, self.purpose);

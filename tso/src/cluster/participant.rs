@@ -14,7 +14,7 @@ use crate::{
     error::TsoError,
     etcd::EtcdFacade,
     util::{constant::Constant, utils::Utils},
-    TsoResult,
+    TsoEtcdKind, TsoResult,
 };
 
 use super::TsoLeadership;
@@ -41,11 +41,15 @@ impl Participant {
         root_path: String,
         etcd_client: EtcdFacade,
     ) -> Participant {
-        let leader_info = ParticipantInfo::new(
-            &config.name,
-            Utils::generate_unique_id(&config.name),
-            &config.etcd_server_urls,
-        );
+        let leader_info = if config.etcd_kind == TsoEtcdKind::Shim {
+            ParticipantInfo::default()
+        } else {
+            ParticipantInfo::new(
+                &config.name,
+                Utils::generate_unique_id(&config.name),
+                &config.etcd_server_urls,
+            )
+        };
 
         let serialize_data = serde_json::to_string(&leader_info).expect("Serialize can't fail");
 
@@ -200,7 +204,7 @@ impl Participant {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ParticipantInfo {
     name: String,
     // id is unique among all participants

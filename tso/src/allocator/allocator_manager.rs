@@ -55,7 +55,7 @@ impl AllocatorManager {
         std::thread::Builder::new()
             .name("TsoAllocatorWorker".into())
             .spawn(move || {
-                allocator_clone.tso_allocator_loop(exit_signal);
+                allocator_clone.tso_allocator_loop(exit_signal.clone());
             })?;
 
         Ok(instance)
@@ -63,11 +63,10 @@ impl AllocatorManager {
 
     /// leader election, if successful, then initialize allocator
     pub fn start_global_allocator_loop(self: Arc<Self>, exit_signal: ExitSignal) -> TsoResult<()> {
-        let allocator_clone = self.clone();
         std::thread::Builder::new()
             .name("TsoElectionWorker".into())
             .spawn(move || {
-                allocator_clone.global_tso_allocator.primary_election_loop(
+                self.global_tso_allocator.primary_election_loop(
                     self.store.as_ref(),
                     &self.config,
                     exit_signal,
@@ -100,15 +99,19 @@ impl AllocatorManager {
             let last = self.physical_last_update_millis.load(Ordering::Relaxed);
 
             // Skip if time not fallback and less than interval
-            if now > last && now < last + self.config.update_physical_interval_millis as u64 {
-                thread::sleep(Duration::from_millis(Constant::LOOP_MIN_INTERVAL_MILLIS));
+            if now > last && now < last + self.config.update_physical_interval_millis {
+                thread::sleep(Duration::from_millis(
+                    self.config.update_physical_interval_millis,
+                ));
                 continue;
             }
 
-            log::info!("entering into allocator daemon");
+            log::debug!("entering into allocator daemon");
 
             // Update the initialized TSO Allocator to advance TSO
             self.update_allocator();
+            self.physical_last_update_millis
+                .store(now, Ordering::Relaxed);
         }
 
         self.global_tso_allocator.reset();

@@ -17,7 +17,7 @@ pub enum TsoStoreKind {
 pub struct TsoStoreFactory;
 
 impl TsoStoreFactory {
-    pub fn get_instance(kind: &TsoStoreKind) -> Box<dyn TsoStore> {
+    pub fn get(kind: &TsoStoreKind) -> Box<dyn TsoStore> {
         match kind {
             TsoStoreKind::MySQL(url) => Box::new(MySQLStore::new(url)),
             TsoStoreKind::Sqlite(url) => Box::new(SqliteStore::new(url)),

@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, fmt::Display};
 
-use coarsetime::Duration;
+use chrono::{DateTime, Local, Utc};
 
 // Millisecond
 pub type UnixTimeStamp = u64;
@@ -51,11 +51,13 @@ impl Ord for Timestamp {
 
 impl Display for Timestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let date_time: DateTime<Utc> =
+            DateTime::from_timestamp_millis(self.physical_millis as i64).unwrap_or_default();
+        let local_time: DateTime<Local> = date_time.into();
         f.write_fmt(format_args!(
-            "Timestamp as {:?}|{}|{}, binary: {}",
-            std::time::SystemTime::UNIX_EPOCH
-                .checked_add(Duration::from_millis(self.physical_millis).into())
-                .unwrap(),
+            "Timestamp as {}/{}|{}|{}, binary: {}",
+            date_time,
+            local_time,
             self.logical,
             self.suffix_bits,
             self.as_u64()

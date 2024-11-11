@@ -127,6 +127,7 @@ impl Lease {
                     // Stop the timer if it's not stopped
                     if !timer.is_elapsed(){
                         tokio::select! {
+                            biased;
                             _ = &mut timer => {}   // try to drain from the channel
                             else => {}
                         }
@@ -160,8 +161,6 @@ impl Lease {
         let lease_timeout = self.lease_timeout;
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval.into());
-            let tick = ticker.tick();
-            tokio::pin!(tick);
 
             log::info!(
                 "start lease keep alive worker, interval: {} millis, purpose: {}",
@@ -222,7 +221,7 @@ impl Lease {
                     _ = exit_signal.recv() => {
                         return;
                     }
-                    _ = &mut tick => {
+                    _ = ticker.tick() => {
                         last_time = start;
                     }
                 }

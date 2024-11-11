@@ -1,3 +1,5 @@
+use crate::util::constant::Constant;
+
 pub enum LeaseGrantResponse {
     Shim,
     Raw(etcd_client::LeaseGrantResponse),
@@ -25,7 +27,8 @@ impl LeaseGrantResponse {
 
     pub fn ttl(&self) -> i64 {
         match self {
-            Self::Shim => 0,
+            // Self::Shim => Constant::SHIM_LEASE_TTL_SEC, // default one day seconds
+            Self::Shim => Constant::SHIM_LEASE_TTL_SEC_FOR_TEST, // for test
             Self::Raw(v) => v.ttl(),
         }
     }

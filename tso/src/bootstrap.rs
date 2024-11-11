@@ -36,22 +36,27 @@ impl Bootstrap {
         let root_path = Cluster::root_path(cluster_id);
         let member = Participant::new_and_start(&config, root_path, etcd_client);
 
-        let store = TsoStoreFactory::get_instance(&config.store_kind);
+        let store = TsoStoreFactory::get(&config.store_kind);
 
         let alloc = AllocatorManager::new_and_start(config, member, store, exit_signal.clone())?;
 
-        alloc
-            .clone()
-            .start_global_allocator_loop(exit_signal.clone())?;
-
-        Self::start_server_loop(exit_signal);
+        Self::start_server_loop(alloc.clone(), exit_signal)?;
 
         Ok(alloc)
     }
 
-    pub fn start_server_loop(_exit_signal: ExitSignal) {
-        // TODO: To make sure the etcd leader and TSO leader are on the same server
-        // go s.leaderLoop()
+    pub fn start_server_loop(
+        alloc: Arc<AllocatorManager>,
+        exit_signal: ExitSignal,
+    ) -> TsoResult<()> {
+        alloc
+            .clone()
+            .start_global_allocator_loop(exit_signal.clone())?;
+
+        // self.leader_loop(alloc);
+        // std::thread::Builder::new()
+        //     .name("TsoLeaderLoopWorker".into())
+        //     .spawn(move || {})?;
 
         // TODO: checks whether there is another participant has higher priority and resign it as the leader if so
         // go s.etcdLeaderLoop()
@@ -67,6 +72,8 @@ impl Bootstrap {
         //     s.initTSOPrimaryWatcher()
         //     s.initSchedulingPrimaryWatcher()
         // }
+
+        Ok(())
     }
 }
 

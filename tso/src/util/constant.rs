@@ -19,4 +19,8 @@ impl Constant {
     pub const WATCH_LOOP_UNHEALTHY_TIMEOUT_MILLIS: u64 = 60 * 1_000;
     pub const REQUEST_PROGRESS_INTERVAL_MILLIS: u64 = 1_000;
     pub const WATCHER_NEW_TIMEOUT_MILLIS: u64 = 3_000;
+
+    /// Lease
+    pub const SHIM_LEASE_TTL_SEC: i64 = 86400; // default one day seconds
+    pub const SHIM_LEASE_TTL_SEC_FOR_TEST: i64 = 10;
 }
