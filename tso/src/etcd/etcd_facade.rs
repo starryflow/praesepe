@@ -3,19 +3,22 @@ use std::fmt::Debug;
 use crate::{bootstrap::ExitSignal, cluster::ParticipantInfo, TsoResult};
 
 use super::{
-    etcd_client::EtcdClient, etcd_shim::EtcdShim, LeaseGrantResponse, LeaseKeepAliveResponse,
+    etcd_client::EtcdClient, etcd_shim_database::EtcdShimDatabase,
+    etcd_shim_singleton::EtcdShimSingleton, LeaseGrantResponse, LeaseKeepAliveResponse,
     WatchOptions, WatchStream, Watcher,
 };
 
 pub enum EtcdFacade {
-    Shim(EtcdShim),
+    ShimSingleton(EtcdShimSingleton),
+    ShimDatabase(EtcdShimDatabase),
     Raw(EtcdClient),
 }
 
 impl Debug for EtcdFacade {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Shim(s) => s.fmt(f),
+            Self::ShimSingleton(s) => s.fmt(f),
+            Self::ShimDatabase(s) => s.fmt(f),
             Self::Raw(r) => r.fmt(f),
         }
     }
@@ -24,14 +27,15 @@ impl Debug for EtcdFacade {
 impl EtcdFacade {
     pub fn new(kind: TsoEtcdKind, url: &str, exit_signal: ExitSignal) -> Self {
         match kind {
-            TsoEtcdKind::Shim => Self::Shim(EtcdShim),
+            TsoEtcdKind::Shim => Self::ShimSingleton(EtcdShimSingleton),
             TsoEtcdKind::Raw => Self::Raw(EtcdClient::new(url, exit_signal)),
         }
     }
 
     pub fn is_healthy(&self) -> bool {
         match self {
-            Self::Shim(s) => s.is_healthy(),
+            Self::ShimSingleton(s) => s.is_healthy(),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.is_healthy(),
         }
     }
@@ -41,7 +45,8 @@ impl EtcdFacade {
 impl EtcdFacade {
     pub fn get_u64(&self, key: &str) -> TsoResult<Option<u64>> {
         match self {
-            Self::Shim(s) => s.get_u64(key),
+            Self::ShimSingleton(s) => s.get_u64(key),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.get_u64(key),
         }
     }
@@ -53,7 +58,8 @@ impl EtcdFacade {
         expected_create_revision: i64,
     ) -> TsoResult<u64> {
         match self {
-            Self::Shim(s) => s.compare_and_set_u64(key, value, expected_create_revision),
+            Self::ShimSingleton(s) => s.compare_and_set_u64(key, value, expected_create_revision),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.compare_and_set_u64(key, value, expected_create_revision),
         }
     }
@@ -66,7 +72,10 @@ impl EtcdFacade {
         lease_id: i64,
     ) -> TsoResult<()> {
         match self {
-            Self::Shim(s) => s.compare_and_set_str(key, value, expected_create_revision, lease_id),
+            Self::ShimSingleton(s) => {
+                s.compare_and_set_str(key, value, expected_create_revision, lease_id)
+            }
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.compare_and_set_str(key, value, expected_create_revision, lease_id),
         }
     }
@@ -76,14 +85,16 @@ impl EtcdFacade {
         key: &str,
     ) -> TsoResult<Option<(ParticipantInfo, i64)>> {
         match self {
-            Self::Shim(s) => s.get_part_info_with_mod_rev(key),
+            Self::ShimSingleton(s) => s.get_part_info_with_mod_rev(key),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.get_part_info_with_mod_rev(key),
         }
     }
 
     pub fn delete(&self, key: &str) -> TsoResult<()> {
         match self {
-            Self::Shim(s) => s.delete(key),
+            Self::ShimSingleton(s) => s.delete(key),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.delete(key),
         }
     }
@@ -93,14 +104,16 @@ impl EtcdFacade {
 impl EtcdFacade {
     pub fn try_grant(&self, ttl_sec: i64, timeout: u64) -> TsoResult<LeaseGrantResponse> {
         match self {
-            Self::Shim(s) => s.try_grant(ttl_sec, timeout),
+            Self::ShimSingleton(s) => s.try_grant(ttl_sec, timeout),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.try_grant(ttl_sec, timeout),
         }
     }
 
     pub fn try_revoke(&self, lease_id: i64, timeout: u64) -> TsoResult<()> {
         match self {
-            Self::Shim(s) => s.try_revoke(lease_id, timeout),
+            Self::ShimSingleton(s) => s.try_revoke(lease_id, timeout),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.try_revoke(lease_id, timeout),
         }
     }
@@ -112,7 +125,8 @@ impl EtcdFacade {
         timeout: u64,
     ) -> TsoResult<LeaseKeepAliveResponse> {
         match self {
-            Self::Shim(s) => s.try_keep_alive_once(lease_id, lease_ttl, timeout),
+            Self::ShimSingleton(s) => s.try_keep_alive_once(lease_id, lease_ttl, timeout),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.try_keep_alive_once(lease_id, timeout),
         }
     }
@@ -127,14 +141,16 @@ impl EtcdFacade {
         timeout: u64,
     ) -> TsoResult<(Watcher, WatchStream)> {
         match self {
-            Self::Shim(s) => s.try_watch(key, options, timeout),
+            Self::ShimSingleton(s) => s.try_watch(key, options, timeout),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.try_watch(key, options, timeout),
         }
     }
 
     pub fn try_request_progress(&self, watcher: &mut Watcher, timeout: u64) -> TsoResult<()> {
         match self {
-            Self::Shim(s) => s.try_request_progress(watcher, timeout),
+            Self::ShimSingleton(s) => s.try_request_progress(watcher, timeout),
+            Self::ShimDatabase(s) => todo!(),
             Self::Raw(r) => r.try_request_progress(watcher, timeout),
         }
     }

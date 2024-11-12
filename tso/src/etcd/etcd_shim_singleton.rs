@@ -4,15 +4,15 @@ use crate::{cluster::ParticipantInfo, TsoResult};
 
 use super::{LeaseGrantResponse, LeaseKeepAliveResponse, WatchOptions, WatchStream, Watcher};
 
-pub struct EtcdShim;
+pub struct EtcdShimSingleton;
 
-impl Debug for EtcdShim {
+impl Debug for EtcdShimSingleton {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("EtcdShim",))
+        f.write_fmt(format_args!("EtcdShimSingleton",))
     }
 }
 
-impl EtcdShim {
+impl EtcdShimSingleton {
     pub fn new(_url: &str) -> Self {
         Self
     }
@@ -25,7 +25,7 @@ impl EtcdShim {
 }
 
 // kv api
-impl EtcdShim {
+impl EtcdShimSingleton {
     pub fn get_u64(&self, _key: &str) -> TsoResult<Option<u64>> {
         // Default 0
         Ok(Some(0))
@@ -66,7 +66,7 @@ impl EtcdShim {
 }
 
 // lease api
-impl EtcdShim {
+impl EtcdShimSingleton {
     pub fn try_grant(&self, ttl_sec: i64, _timeout: u64) -> TsoResult<LeaseGrantResponse> {
         Ok(LeaseGrantResponse::new_shim(ttl_sec))
     }
@@ -86,7 +86,7 @@ impl EtcdShim {
 }
 
 // watch api
-impl EtcdShim {
+impl EtcdShimSingleton {
     pub fn try_watch(
         &self,
         _key: &str,

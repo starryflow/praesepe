@@ -86,11 +86,7 @@ impl TsoLeadership {
     }
     async fn async_watch(&self, mut revision: i64, mut exit_signal: ExitSignal) {
         let mut watcher: Option<Watcher> = None;
-        // defer! {
-        //     if let Some(watcher) = watcher.as_mut(){
-        //         watcher.cancel();
-        //     }
-        // }
+
         let mut ticker = tokio::time::interval(
             Duration::from_millis(Constant::REQUEST_PROGRESS_INTERVAL_MILLIS).into(),
         );
