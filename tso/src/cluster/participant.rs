@@ -204,13 +204,23 @@ impl Participant {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ParticipantInfo {
     name: String,
     // id is unique among all participants
     member_id: u64,
     // etc server urls
     client_urls: Vec<String>,
+}
+
+impl Default for ParticipantInfo {
+    fn default() -> Self {
+        Self {
+            name: "default_participant".into(),
+            member_id: 0,
+            client_urls: vec![],
+        }
+    }
 }
 
 impl ParticipantInfo {

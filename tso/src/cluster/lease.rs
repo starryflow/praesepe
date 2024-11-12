@@ -102,6 +102,8 @@ impl Lease {
         etcd_client: Arc<EtcdFacade>,
         mut exit_signal: ExitSignal,
     ) {
+        log::info!("lease keep alive start, purpose: {}", self.purpose);
+
         let (sender, receiver) = tokio::sync::broadcast::channel(1);
         let local_exit_signal = ExitSignal::new(receiver);
         let mut time_ch =
