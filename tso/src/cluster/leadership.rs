@@ -26,6 +26,7 @@ pub struct TsoLeadership {
 
     /// The lease which is used to get this leadership
     lease: Mutex<Option<Arc<Lease>>>,
+    keep_alive_exit_signal: Mutex<Option<tokio::sync::broadcast::Sender<()>>>,
     etcd_client: Arc<EtcdFacade>,
     /// leader_key and leader_value are key-value pair in etcd
     leader_key: String,
@@ -60,12 +61,14 @@ impl TsoLeadership {
         Ok(())
     }
 
-    pub fn keep(&self, exit_signal: ExitSignal) {
+    pub fn keep(&self) {
         if let Some(lease) = self.lease.lock().as_ref() {
+            let (sender, receiver) = tokio::sync::broadcast::channel(1);
+            self.keep_alive_exit_signal.lock().replace(sender);
             let _ = self.rt.spawn(
                 lease
                     .clone()
-                    .keep_alive(self.etcd_client.clone(), exit_signal),
+                    .keep_alive(self.etcd_client.clone(), ExitSignal::new(receiver)),
             );
         }
     }
@@ -238,6 +241,9 @@ impl TsoLeadership {
 
     pub fn reset(&self) {
         if let Some(lease) = self.lease.lock().as_ref() {
+            if let Some(exit_signal) = self.keep_alive_exit_signal.lock().take() {
+                let _ = exit_signal.send(());
+            }
             lease.close(&self.etcd_client);
             self.primary_watch
                 .store(false, std::sync::atomic::Ordering::Relaxed);
@@ -299,6 +305,7 @@ impl TsoLeadership {
         Self {
             purpose: purpose.into(),
             lease: Mutex::new(None),
+            keep_alive_exit_signal: Mutex::new(None),
             etcd_client: Arc::from(etcd_client),
             leader_key: leader_key.to_owned(),
             leader_value: Mutex::new("".to_owned()),

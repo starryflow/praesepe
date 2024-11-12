@@ -102,12 +102,16 @@ impl Lease {
         etcd_client: Arc<EtcdFacade>,
         mut exit_signal: ExitSignal,
     ) {
+        let (sender, receiver) = tokio::sync::broadcast::channel(1);
+        let local_exit_signal = ExitSignal::new(receiver);
+        let mut time_ch =
+            self.keep_alive_worker(self.lease_timeout / 3, etcd_client, local_exit_signal);
+
+        // after keep alive loop, make keep alive worker exit
         defer! {
             log::info!("lease keep alive stopped, purpose: {}", self.purpose);
+            let _ = sender.send(());
         };
-
-        let mut time_ch =
-            self.keep_alive_worker(self.lease_timeout / 3, etcd_client, exit_signal.clone());
 
         let timer = tokio::time::sleep(self.lease_timeout.into());
         tokio::pin!(timer);
@@ -146,7 +150,6 @@ impl Lease {
     }
 
     /// Periodically call `lease.keep_alive_once` and post back latest received expire time into the channel
-    /// TODO: should delete if unneccessary
     fn keep_alive_worker(
         &self,
         interval: Duration,

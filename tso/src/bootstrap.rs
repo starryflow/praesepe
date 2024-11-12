@@ -91,7 +91,10 @@ impl ExitSignal {
     }
 
     pub fn try_exit(&mut self) -> bool {
-        self.0.try_recv().is_ok()
+        match self.0.try_recv() {
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => false,
+            _ => true,
+        }
     }
 
     pub fn wait_exit(&mut self) -> bool {
@@ -105,7 +108,8 @@ impl ExitSignal {
         }
     }
 
-    pub async fn recv(&mut self) -> TsoResult<()> {
-        self.0.recv().await.map_err(|e| anyhow::anyhow!(e))
+    pub async fn recv(&mut self) {
+        // if `sender` is closed, will get a Err, but don't throw this Err
+        let _ = self.0.recv().await;
     }
 }

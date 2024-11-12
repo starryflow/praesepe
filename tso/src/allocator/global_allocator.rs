@@ -106,7 +106,7 @@ impl GlobalTsoAllocator {
         let _reset_leader_once = ResetLeaderOnce(self);
 
         // maintain the leadership, after this, TSO can be service
-        self.member.keep_leader(exit_signal.clone());
+        self.member.keep_leader();
         log::info!(
             "campaign tso primary ok, campaign-tso-primary-name: {}",
             self.member.get_name()

@@ -139,8 +139,8 @@ impl Participant {
     }
 
     /// keep the leader's leadership
-    pub fn keep_leader(&self, exit_signal: ExitSignal) {
-        self.leadership.keep(exit_signal);
+    pub fn keep_leader(&self) {
+        self.leadership.keep();
     }
 
     /// checks if someone else is taking the leadership. If yes, returns the leader;
