@@ -17,6 +17,7 @@ pub struct Lease {
     purpose: String,
     /// lease info
     lease_id: Option<i64>,
+    lease_ttl: Option<i64>,
     /// lease_timeout and expire_time are used to control the lease's lifetime
     lease_timeout: Duration,
     expire_time: AtomicU64,
@@ -27,17 +28,21 @@ impl Lease {
         Self {
             purpose: purpose.into(),
             lease_id: None,
+            lease_ttl: None,
             lease_timeout: 0.into(),
             expire_time: 0.into(),
         }
     }
 
     /// initialize the lease and expire_time
-    pub fn grant(&mut self, lease_timeout_sec: i64, lease_client: &EtcdFacade) -> TsoResult<()> {
+    pub fn grant(&mut self, lease_timeout: u64, lease_client: &EtcdFacade) -> TsoResult<()> {
         let start = Clock::now_since_epoch().as_millis();
 
         let lease_resp = lease_client
-            .try_grant(lease_timeout_sec, Constant::DEFAULT_REQUEST_TIMEOUT_MILLIS)
+            .try_grant(
+                lease_timeout as i64 / 1000,
+                Constant::DEFAULT_REQUEST_TIMEOUT_MILLIS,
+            )
             .map_err(|e| anyhow::anyhow!(TsoError::EtcdGrantLease(e)))?;
 
         let cost = Clock::now_since_epoch().as_millis() - start;
@@ -49,14 +54,15 @@ impl Lease {
             );
         }
         log::info!(
-            "lease granted, lease-id: {}, lease-timeout: {}, purpose: {}",
+            "lease granted, lease-id: {}, lease-timeout: {} second, purpose: {}",
             lease_resp.id(),
             lease_resp.ttl(),
             self.purpose
         );
 
         self.lease_id = Some(lease_resp.id());
-        self.lease_timeout = Duration::from_secs(lease_timeout_sec as u64);
+        self.lease_ttl = Some(lease_resp.ttl());
+        self.lease_timeout = Duration::from_millis(lease_timeout as u64);
         self.set_expire_time(start + lease_resp.ttl() as u64 * 1000);
         Ok(())
     }
@@ -125,16 +131,8 @@ impl Lease {
                     }
 
                     // Stop the timer if it's not stopped
-                    if !timer.is_elapsed(){
-                        tokio::select! {
-                            biased;
-                            _ = &mut timer => {}   // try to drain from the channel
-                            else => {}
-                        }
-                    }
-
                     // We need be careful here
-                    timer.as_mut().reset(Instant::now()+self.lease_timeout.into());
+                    timer.as_mut().reset(Instant::now() + self.lease_timeout.into());
                 }
                 _ = &mut timer => {
                     log::info!("keep alive lease too slow, timeout-duration: {} millis, actual-expire: {} millis, purpose: {}",self.lease_timeout.as_millis(), self.get_expire_time(), self.purpose);
@@ -148,6 +146,7 @@ impl Lease {
     }
 
     /// Periodically call `lease.keep_alive_once` and post back latest received expire time into the channel
+    /// TODO: should delete if unneccessary
     fn keep_alive_worker(
         &self,
         interval: Duration,
@@ -158,6 +157,7 @@ impl Lease {
 
         let purpose = self.purpose.to_owned();
         let lease_id = self.lease_id;
+        let lease_ttl = self.lease_ttl;
         let lease_timeout = self.lease_timeout;
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval.into());
@@ -165,7 +165,7 @@ impl Lease {
             log::info!(
                 "start lease keep alive worker, interval: {} millis, purpose: {}",
                 interval.as_millis(),
-                purpose
+                purpose,
             );
             defer! {
                 log::info!("stop lease keep alive worker, purpose: {}", purpose);
@@ -188,10 +188,12 @@ impl Lease {
                 let tx_clone = tx.clone();
                 let etcd_client_clone = etcd_client.clone();
                 tokio::spawn(async move {
-                    if let Some(lease_id) = lease_id {
-                        match etcd_client_clone
-                            .try_keep_alive_once(lease_id, lease_timeout.as_millis())
-                        {
+                    if let (Some(lease_id), Some(lease_ttl)) = (lease_id, lease_ttl) {
+                        match etcd_client_clone.try_keep_alive_once(
+                            lease_id,
+                            lease_ttl,
+                            lease_timeout.as_millis(),
+                        ) {
                             Ok(resp) => {
                                 if resp.ttl() > 0 {
                                     let expire = start + resp.ttl() as u64 * 1000;

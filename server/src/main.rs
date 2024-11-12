@@ -1,9 +1,19 @@
+use std::io::Write;
 use tso::{Bootstrap, Config, ExitSignal};
 
 pub fn main() {
-    // env_logger::init();
     let mut builder = env_logger::Builder::new();
     builder
+        .format(|buf, record| {
+            let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+            writeln!(
+                buf,
+                "{} [{}] - {}",
+                timestamp,
+                record.level(),
+                record.args()
+            )
+        })
         .filter(None, log::LevelFilter::Info)
         .write_style(env_logger::WriteStyle::Always)
         .init();

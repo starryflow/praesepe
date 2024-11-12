@@ -131,7 +131,7 @@ impl Participant {
     }
 
     /// campaign the leadership and make it become a leader
-    pub fn campaign_leader(&self, lease_timeout: i64) -> TsoResult<()> {
+    pub fn campaign_leader(&self, lease_timeout: u64) -> TsoResult<()> {
         if !self.campaign_check() {
             anyhow::bail!(TsoError::CheckCampaign);
         }
@@ -158,7 +158,7 @@ impl Participant {
                     if let Err(e) = self.leadership.delete_leader_key() {
                         log::error!("deleting the leader key meets error, cause: {}", e);
                         std::thread::sleep(Duration::from_millis(
-                            Constant::LOOP_MIN_INTERVAL_MILLIS,
+                            Constant::LEADER_CHECK_SKIP_MILLIS,
                         ));
                         (None, true)
                     } else {
@@ -175,7 +175,7 @@ impl Participant {
             }
             Err(e) => {
                 log::error!("getting the leader meets error, cause: {}", e);
-                std::thread::sleep(Duration::from_millis(Constant::LOOP_MIN_INTERVAL_MILLIS));
+                std::thread::sleep(Duration::from_millis(Constant::LEADER_CHECK_SKIP_MILLIS));
                 (None, true)
             }
         }

@@ -67,16 +67,17 @@ impl EtcdShim {
 
 // lease api
 impl EtcdShim {
-    pub fn try_grant(&self, _ttl_sec: i64, _timeout: u64) -> TsoResult<LeaseGrantResponse> {
-        Ok(LeaseGrantResponse::default())
+    pub fn try_grant(&self, ttl_sec: i64, _timeout: u64) -> TsoResult<LeaseGrantResponse> {
+        Ok(LeaseGrantResponse::new_shim(ttl_sec))
     }
 
     pub fn try_keep_alive_once(
         &self,
         _lease_id: i64,
+        lease_ttl: i64,
         _timeout: u64,
     ) -> TsoResult<LeaseKeepAliveResponse> {
-        Ok(LeaseKeepAliveResponse::default())
+        Ok(LeaseKeepAliveResponse::new_shim(lease_ttl))
     }
 
     pub fn try_revoke(&self, _lease_id: i64, _timeout: u64) -> TsoResult<()> {

@@ -9,7 +9,6 @@ use crate::{
     config::Config,
     error::TsoError,
     store::TsoStore,
-    util::constant::Constant,
     Timestamp, TsoResult,
 };
 
@@ -82,7 +81,7 @@ impl GlobalTsoAllocator {
                         log::info!("campaign tso primary meets error due to txn conflict, another tso server may campaign successfully, campaign-tso-primary-name: {}", self.member.get_name());
                     }
                     TsoError::CheckCampaign => {
-                        log::info!("campaign tso primary meets error due to pre-check campaign failed, the tso keyspace group may be in split, campaign-tso-primary-name: {}", self.member.get_name());
+                        log::info!("campaign tso primary meets error due to pre-check campaign failed, the tso may be in split, campaign-tso-primary-name: {}", self.member.get_name());
                     }
                     ee @ _ => {
                         log::error!("campaign tso primary meets error due to etcd error, campaign-tso-primary-name: {}, cause: {}", self.member.get_name(), ee);
@@ -140,8 +139,8 @@ impl GlobalTsoAllocator {
             }
 
             let start = Clock::now_since_epoch().as_millis();
-            if start - last_time < Constant::LEADER_TICK_INTERVAL_MILLIS {
-                thread::sleep(Duration::from_secs(10));
+            if start - last_time < config.leader_tick_interval_millis {
+                thread::sleep(Duration::from_millis(config.leader_tick_interval_millis));
                 continue;
             }
 

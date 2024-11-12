@@ -122,7 +122,7 @@ impl AllocatorManager {
     fn update_allocator(&self) {
         if !self.leadership.check() {
             log::info!("allocator doesn't campaign leadership yet");
-            thread::sleep(Duration::from_millis(Constant::LOOP_MIN_INTERVAL_MILLIS));
+            thread::sleep(Duration::from_millis(Constant::LEADER_CHECK_SKIP_MILLIS));
             return;
         }
 

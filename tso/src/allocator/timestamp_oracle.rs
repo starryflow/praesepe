@@ -396,7 +396,7 @@ impl TimestampOracle {
             if current_physical == 0 {
                 // If it's leader, maybe SyncTimestamp hasn't completed yet
                 if leadership.check() {
-                    std::thread::sleep(Duration::from_millis(Constant::LOOP_MIN_INTERVAL_MILLIS));
+                    std::thread::sleep(Duration::from_millis(Constant::LEADER_CHECK_SKIP_MILLIS));
                     continue;
                 }
                 self.metric.not_leader_anymore_event.inc();

@@ -10,10 +10,7 @@ use std::{
 use coarsetime::Clock;
 use etcd_client::EventType;
 use parking_lot::Mutex;
-use tokio::{
-    runtime::{Builder, Runtime},
-    sync::OnceCell,
-};
+use tokio::runtime::{Builder, Runtime};
 
 use crate::{
     bootstrap::ExitSignal,
@@ -28,7 +25,7 @@ pub struct TsoLeadership {
     purpose: String,
 
     /// The lease which is used to get this leadership
-    lease: OnceCell<Arc<Lease>>,
+    lease: Mutex<Option<Arc<Lease>>>,
     etcd_client: Arc<EtcdFacade>,
     /// leader_key and leader_value are key-value pair in etcd
     leader_key: String,
@@ -41,31 +38,30 @@ pub struct TsoLeadership {
 }
 
 impl TsoLeadership {
-    pub fn campaign(&self, lease_timeout_sec: i64, leader_data: &str) -> TsoResult<()> {
+    pub fn campaign(&self, lease_timeout: u64, leader_data: &str) -> TsoResult<()> {
         *self.leader_value.lock() = leader_data.to_owned();
 
         // Create a new lease to campaign
         let mut new_lease = Lease::new(&self.purpose);
-        new_lease.grant(lease_timeout_sec, &self.etcd_client)?;
+        new_lease.grant(lease_timeout, &self.etcd_client)?;
 
         // The leader key must not exist, so the CreateRevision is 0
         self.etcd_client
             .compare_and_set_str(&self.leader_key, leader_data, 0, new_lease.get_lease_id())
-            .inspect(|_| new_lease.close(&self.etcd_client))?;
+            .inspect_err(|_| new_lease.close(&self.etcd_client))?;
 
         log::info!(
             "write leaderData to leaderPath ok, leader-key: {}, purpose: {}",
             self.leader_key,
             self.purpose
         );
-        self.lease
-            .set(Arc::from(new_lease))
-            .expect("lease set duplicate");
+
+        self.lease.lock().replace(Arc::from(new_lease));
         Ok(())
     }
 
     pub fn keep(&self, exit_signal: ExitSignal) {
-        if let Some(lease) = self.lease.get() {
+        if let Some(lease) = self.lease.lock().as_ref() {
             let _ = self.rt.spawn(
                 lease
                     .clone()
@@ -75,7 +71,11 @@ impl TsoLeadership {
     }
 
     pub fn check(&self) -> bool {
-        self.lease.get().map(|x| !x.is_expired()).unwrap_or(false)
+        self.lease
+            .lock()
+            .as_ref()
+            .map(|x| !x.is_expired())
+            .unwrap_or(false)
     }
 
     pub fn watch(&self, revision: i64, exit_signal: ExitSignal) {
@@ -131,7 +131,7 @@ impl TsoLeadership {
                         .with_progress_notify()
                         .into(),
                 ),
-                Constant::WATCHER_NEW_TIMEOUT_MILLIS,
+                Constant::REQUEST_PROGRESS_INTERVAL_MILLIS,
             ) {
                 Ok((watcher, watch_stream)) => (watcher, watch_stream),
                 Err(e) => {
@@ -237,7 +237,7 @@ impl TsoLeadership {
     }
 
     pub fn reset(&self) {
-        if let Some(lease) = self.lease.get() {
+        if let Some(lease) = self.lease.lock().as_ref() {
             lease.close(&self.etcd_client);
             self.primary_watch
                 .store(false, std::sync::atomic::Ordering::Relaxed);
@@ -298,7 +298,7 @@ impl TsoLeadership {
 
         Self {
             purpose: purpose.into(),
-            lease: OnceCell::new(),
+            lease: Mutex::new(None),
             etcd_client: Arc::from(etcd_client),
             leader_key: leader_key.to_owned(),
             leader_value: Mutex::new("".to_owned()),

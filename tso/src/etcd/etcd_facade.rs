@@ -108,10 +108,11 @@ impl EtcdFacade {
     pub fn try_keep_alive_once(
         &self,
         lease_id: i64,
+        lease_ttl: i64,
         timeout: u64,
     ) -> TsoResult<LeaseKeepAliveResponse> {
         match self {
-            Self::Shim(s) => s.try_keep_alive_once(lease_id, timeout),
+            Self::Shim(s) => s.try_keep_alive_once(lease_id, lease_ttl, timeout),
             Self::Raw(r) => r.try_keep_alive_once(lease_id, timeout),
         }
     }
